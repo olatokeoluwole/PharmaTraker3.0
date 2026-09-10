@@ -158,7 +158,7 @@ export default function AuthView({ onLogin }: { onLogin: () => void }) {
           </div>
         </div>
         <h2 className="mt-6 text-center text-2xl font-bold text-slate-800 tracking-tight">
-          PharmaTracker
+          PharmaTracker 3.0
         </h2>
         <p className="mt-2 text-center text-sm text-slate-500">
           {isForgotPassword 

@@ -170,7 +170,7 @@ export default function AnalyticsView({ profile, drugs, purchases, dispenses }: 
     <div className="flex flex-col gap-4 font-sans bg-[#f7f8f9] min-h-screen text-slate-800">
       <div className="flex items-center justify-between pb-2 border-b border-slate-200">
         <h1 className="text-xl font-bold uppercase tracking-wide flex items-center">
-          <BarChart3 className="w-5 h-5 mr-2 text-indigo-600" /> PharmaTracker <span className="font-light ml-2 text-sm text-slate-500 capitalize tracking-normal">Business Intelligence View</span>
+          <BarChart3 className="w-5 h-5 mr-2 text-indigo-600" /> PharmaTracker 3.0 <span className="font-light ml-2 text-sm text-slate-500 capitalize tracking-normal">Business Intelligence View</span>
         </h1>
       </div>
       

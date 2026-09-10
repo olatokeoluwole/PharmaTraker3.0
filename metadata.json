@@ -1,5 +1,5 @@
 {
-  "name": "Remix Pharmacy Inventory Tracker 2.0",
+  "name": "PharmaTracker 3.0",
   "description": "Hospital drug inventory management system with doctor, dispensary, and admin roles. Tracks prescriptions, dispensing, and missing inventory.",
   "requestFramePermissions": [],
   "majorCapabilities": [

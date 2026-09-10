@@ -31,7 +31,7 @@ export default function Layout({
             <Activity className="w-5 h-5 text-indigo-400" />
           </div>
           <h1 className="text-lg font-semibold tracking-tight">
-            PharmaTracker <span className="text-indigo-300/70 font-light text-sm hidden sm:inline">| System Status</span>
+            PharmaTracker 3.0 <span className="text-indigo-300/70 font-light text-sm hidden sm:inline">| System Status</span>
           </h1>
         </div>
         <div className="flex gap-4 sm:gap-6 text-xs uppercase tracking-widest font-bold items-center">
