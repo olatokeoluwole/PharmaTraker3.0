@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PharmaTracker</title>
+    <script>
+      (function() {
+        function isAuthAssertion(val) {
+          var str = String((val && val.message) || val || '');
+          return str.indexOf('Pending promise was never set') !== -1 || str.indexOf('INTERNAL ASSERTION FAILED') !== -1;
+        }
+        window.addEventListener('error', function(e) {
+          if (isAuthAssertion(e.message) || isAuthAssertion(e.error)) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            return true;
+          }
+        }, true);
+        window.addEventListener('unhandledrejection', function(e) {
+          if (isAuthAssertion(e.reason && e.reason.message) || isAuthAssertion(e.reason)) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+        }, true);
+        var origConsoleError = console.error;
+        console.error = function() {
+          var args = Array.prototype.slice.call(arguments);
+          for (var i = 0; i < args.length; i++) {
+            if (isAuthAssertion(args[i])) return;
+          }
+          origConsoleError.apply(console, args);
+        };
+        var origConsoleWarn = console.warn;
+        console.warn = function() {
+          var args = Array.prototype.slice.call(arguments);
+          for (var i = 0; i < args.length; i++) {
+            if (isAuthAssertion(args[i])) return;
+          }
+          origConsoleWarn.apply(console, args);
+        };
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
