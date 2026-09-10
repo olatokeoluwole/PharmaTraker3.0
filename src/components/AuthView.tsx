@@ -52,7 +52,12 @@ export default function AuthView({ onLogin }: { onLogin: () => void }) {
     setErrorInfo(null);
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+      const { error } = await supabase.auth.signInWithOAuth({ 
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
       if (error) throw error;
       // Google Auth redirects, so onLogin will be handled by App.tsx session listener
     } catch (err: any) {

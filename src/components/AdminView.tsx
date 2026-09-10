@@ -1,7 +1,7 @@
 import React from "react";
 import { useState, useEffect, useMemo } from 'react';
-import { db } from '../firebase';
-import { collection, query, orderBy, onSnapshot, doc, setDoc, addDoc, updateDoc, deleteDoc, increment, getDoc } from '../firebase';
+import { db } from '../db';
+import { collection, query, orderBy, onSnapshot, doc, setDoc, addDoc, updateDoc, deleteDoc, increment, getDoc } from '../db';
 import { UserProfile, Drug, PurchaseRecord, DispenseRecord, AuditReport, DisposalRecord, OperatingExpense, Role } from '../types';
 import { Package, BarChart3, Plus, AlertTriangle, CheckCircle2, UserX, Users, Trash2, Clock, Wallet, DollarSign, Edit2, Check, X, ShieldAlert, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts";

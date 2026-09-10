@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { db } from '../firebase';
-import { collection, onSnapshot, addDoc, doc, updateDoc, setDoc, deleteDoc } from '../firebase';
+import { db } from '../db';
+import { collection, onSnapshot, addDoc, doc, updateDoc, setDoc, deleteDoc } from '../db';
 import { UserProfile, Drug, PurchaseRecord, DispenseRecord, OperatingExpense, ExpenseCategory } from '../types';
 import { 
   DollarSign, TrendingUp, TrendingDown, Wallet, Receipt, 

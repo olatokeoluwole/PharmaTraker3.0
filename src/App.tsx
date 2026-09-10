@@ -238,6 +238,15 @@ export default function App() {
         locationId
       };
 
+      // Ensure the user is synced to the users table (important for OAuth logins)
+      supabase.from('users').upsert({ 
+        id: currentUser.id, 
+        email: userEmail, 
+        role: effectiveRole, 
+        name: displayName,
+        location_id: locationId || null
+      }).then(() => {});
+
       setProfile(freshProfile);
       localStorage.setItem('pharmatracker_active_session', JSON.stringify({
         uid: currentUser.id,

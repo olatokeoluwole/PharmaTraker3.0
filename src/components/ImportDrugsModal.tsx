@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import Papa from 'papaparse';
-import { db } from '../firebase';
-import { collection, writeBatch, doc } from '../firebase';
+import { db } from '../db';
+import { collection, writeBatch, doc } from '../db';
 import { Download, Upload, AlertCircle, CheckCircle2, X } from 'lucide-react';
 
 interface ImportDrugsModalProps {

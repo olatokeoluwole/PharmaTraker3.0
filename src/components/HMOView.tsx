@@ -1,7 +1,7 @@
 import React from "react";
 import { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, onSnapshot, addDoc, query, orderBy, doc, updateDoc } from '../firebase';
+import { db } from '../db';
+import { collection, onSnapshot, addDoc, query, orderBy, doc, updateDoc } from '../db';
 import { UserProfile, Drug, Prescription } from '../types';
 import { Activity, Search, AlertCircle, FileText, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';

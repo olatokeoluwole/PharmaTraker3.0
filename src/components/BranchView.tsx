@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, getDoc } from '../firebase';
+import { db } from '../db';
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, getDoc } from '../db';
 import { UserProfile, Prescription, Drug, DispenseRecord } from '../types';
 import { Check, Clock, PackageOpen, Plus, DollarSign, CreditCard, ShoppingCart, TrendingUp, AlertCircle, Lock, ShieldCheck } from 'lucide-react';
 import { format } from 'date-fns';
