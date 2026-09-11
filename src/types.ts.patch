@@ -1,0 +1,116 @@
+--- src/types.ts
++++ src/types.ts
+@@ -1,13 +1,21 @@
+-export type Role = 'admin' | 'doctor' | 'branch' | 'store' | 'pending' | 'hmo';
++export type Role = 'super_admin' | 'admin' | 'doctor' | 'branch' | 'store' | 'pending' | 'hmo';
++
++export interface Organization {
++  id: string;
++  name: string;
++  status: 'active' | 'suspended';
++  createdAt: number;
++}
+ 
+ export interface UserProfile {
+   id: string;
+   email: string;
+   name: string;
+   role: Role;
+   locationId?: string; // which branch they are assigned to
++  organizationId?: string;
+ }
+ 
+ export interface Drug {
+   id: string;
+   name: string;
+@@ -16,6 +24,7 @@
+   category?: string;
+   costPrice?: number; // Cost price per unit
+   sellingPrice?: number; // Selling price per unit
+   branchStock?: { [locationId: string]: number }; // Maps locationId to quantity
+   createdAt: number;
++  organizationId?: string;
+ }
+ 
+ export interface ConsumableUsageRecord {
+@@ -25,6 +34,7 @@
+   drugId: string;
+   drugName: string;
+   quantityUsed: number;
+   department?: string;
+   createdAt: number;
++  organizationId?: string;
+ }
+ 
+ export interface InternalTransferRecord {
+@@ -34,6 +44,7 @@
+   drugId: string;
+   drugName: string;
+   quantityTransferred: number;
+   createdAt: number;
++  organizationId?: string;
+ }
+ 
+ export interface Prescription {
+@@ -46,6 +57,7 @@
+   status: 'pending' | 'dispensed';
+   targetBranchId?: string;
+   createdAt: number;
++  organizationId?: string;
+ }
+ 
+ export interface DispenseRecord {
+@@ -58,6 +70,7 @@
+   patientName?: string;
+   paymentMethod?: 'cash' | 'card' | 'transfer' | 'insurance' | 'other';
+   createdAt: number;
++  organizationId?: string;
+ }
+ 
+ export interface PurchaseRecord {
+@@ -70,6 +83,7 @@
+   invoiceNumber?: string;
+   expiryDate?: string;
+   createdAt: number;
++  organizationId?: string;
+ }
+ 
+ export type ExpenseCategory = 
+@@ -88,6 +102,7 @@
+   paymentMethod?: 'cash' | 'transfer' | 'card' | 'cheque' | 'other';
+   referenceNumber?: string;
+   createdAt: number;
++  organizationId?: string;
+ }
+ 
+ export interface AuditReport {
+@@ -100,6 +115,7 @@
+   notes: string;
+   adminId: string;
+   createdAt: number;
++  organizationId?: string;
+ }
+ 
+ export interface DisposalRecord {
+@@ -110,6 +126,7 @@
+   adminId: string;
+   adminName: string;
+   createdAt: number;
++  organizationId?: string;
+ }
+ 
+ export interface InterBranchTransfer {
+@@ -124,6 +141,7 @@
+   approvedByName?: string;
+   createdAt: number;
+   updatedAt: number;
++  organizationId?: string;
+ }
+ 
+ export interface PharmacyBranch {
+@@ -132,4 +150,5 @@
+   address: string;
+   email: string;
+   createdAt: number;
++  organizationId?: string;
+ }

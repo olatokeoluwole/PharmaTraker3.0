@@ -1,5 +1,10 @@
 import { supabase } from './supabase';
 
+export let currentTenantId: string | null = null;
+export function setTenantId(id: string | null) {
+  currentTenantId = id;
+}
+
 const toSnake = (str: string) => str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 const toCamel = (str: string) => str.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
 
@@ -76,6 +81,9 @@ function getPrimaryKey(table: string) {
 export async function addDoc(colRef: any, data: any) {
   const table = colRef.path;
   const payload = toSupabasePayload(data);
+  if (currentTenantId && table !== 'organizations' && !payload.organization_id) {
+    payload.organization_id = currentTenantId;
+  }
   const { data: res, error } = await supabase.from(table).insert(payload).select().single();
   if (error) { console.error("addDoc error", error); throw error; }
   const pk = getPrimaryKey(table);
@@ -86,6 +94,9 @@ export async function setDoc(docRef: any, data: any, options?: { merge?: boolean
   const payload = toSupabasePayload(data);
   const pk = getPrimaryKey(docRef.table);
   payload[pk] = docRef.id;
+  if (currentTenantId && docRef.table !== 'organizations' && !payload.organization_id) {
+    payload.organization_id = currentTenantId;
+  }
   const { error } = await supabase.from(docRef.table).upsert(payload);
   if (error) { console.error("setDoc error", error); throw error; }
 }
@@ -127,6 +138,9 @@ export async function getDoc(docRef: any) {
 export async function getDocs(queryRef: any) {
   const table = queryRef.path;
   let sbQuery = supabase.from(table).select('*');
+  if (currentTenantId && table !== 'organizations') {
+    sbQuery = sbQuery.eq('organization_id', currentTenantId);
+  }
   if (queryRef.constraints) {
     for (const c of queryRef.constraints) {
       if (c._type === 'where') {
@@ -197,6 +211,9 @@ export function onSnapshot(ref: any, onNext: (snap: any) => void, onError?: (err
   };
 
   let sbQuery = supabase.from(table).select('*');
+  if (currentTenantId && table !== 'organizations') {
+    sbQuery = sbQuery.eq('organization_id', currentTenantId);
+  }
   if (ref.constraints) {
     for (const c of ref.constraints) {
       if (c._type === 'where') {
@@ -217,6 +234,10 @@ export function onSnapshot(ref: any, onNext: (snap: any) => void, onError?: (err
 
   const channel = supabase.channel(`public:${table}_${Math.random()}`)
     .on('postgres_changes', { event: '*', schema: 'public', table }, (payload) => {
+      if (currentTenantId && table !== 'organizations') {
+        const itemOrgId = (payload.new as any)?.organization_id || (payload.old as any)?.organization_id;
+        if (itemOrgId && itemOrgId !== currentTenantId) return;
+      }
       const pk = getPrimaryKey(table);
       const camelPk = toCamel(pk);
       if (payload.eventType === 'INSERT') {

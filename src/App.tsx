@@ -2,6 +2,7 @@ import { useEffect, useState, Dispatch, SetStateAction } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { setTenantId } from './db';
 import { RefreshCw, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { UserProfile, Role } from './types';
 import AuthView from './components/AuthView';
@@ -11,6 +12,7 @@ import BranchView from './components/BranchView';
 import StoreView from './components/StoreView';
 import AdminView from './components/AdminView';
 import HMOView from './components/HMOView';
+import SuperAdminView from './components/SuperAdminView';
 
 interface PendingApprovalProps {
   user: User;
@@ -207,6 +209,7 @@ export default function App() {
       let effectiveRole: Role = 'pending';
       let displayName = currentUser.user_metadata?.name || userEmail.split('@')[0];
       let locationId = undefined;
+      let organizationId = undefined;
 
       // Check staff_roles first
       const { data: staffData } = await supabase.from('staff_roles').select('*').eq('email', userEmail).maybeSingle();
@@ -214,6 +217,7 @@ export default function App() {
         effectiveRole = staffData.role;
         displayName = staffData.name || displayName;
         locationId = staffData.location_id;
+        organizationId = staffData.organization_id;
       } else {
         // Fallback to users table
         const { data: userData } = await supabase.from('users').select('*').eq('id', currentUser.id).maybeSingle();
@@ -224,18 +228,23 @@ export default function App() {
           displayName = userData.name;
         }
         locationId = userData?.location_id;
+        organizationId = userData?.organization_id;
       }
 
-      if (effectiveRole === 'pending' && isSuperAdmin) {
-        effectiveRole = 'admin';
+      if (isSuperAdmin) {
+        effectiveRole = 'super_admin';
+        organizationId = undefined; // Super admin doesn't belong to a single organization
       }
+
+      setTenantId(organizationId || null);
 
       const freshProfile: UserProfile = {
         id: currentUser.id,
         name: displayName,
         email: userEmail,
         role: effectiveRole,
-        locationId
+        locationId,
+        organizationId
       };
 
       // Ensure the user is synced to the users table (important for OAuth logins)
@@ -244,7 +253,8 @@ export default function App() {
         email: userEmail, 
         role: effectiveRole, 
         name: displayName,
-        location_id: locationId || null
+        location_id: locationId || null,
+        organization_id: organizationId || null
       }).then(() => {});
 
       setProfile(freshProfile);
@@ -290,6 +300,7 @@ export default function App() {
       <Layout profile={profile} onLogout={handleManualLogout}>
         <Routes>
           <Route path="/" element={
+            profile.role === 'super_admin' ? <SuperAdminView profile={profile} /> :
             profile.role === 'admin' ? <AdminView profile={profile} /> :
             profile.role === 'store' ? <StoreView profile={profile} /> :
             profile.role === 'doctor' ? <DoctorView profile={profile} /> :

@@ -1,0 +1,13 @@
+import { supabase } from './supabase';
+import { toSnake, toCamel, convertKeys } from './utils';
+
+export let currentTenantId: string | null = null;
+export function setTenantId(id: string | null) {
+  currentTenantId = id;
+}
+
+// Check if a table is tenant-isolated
+function isTenantIsolated(table: string) {
+  return table !== 'organizations';
+}
+

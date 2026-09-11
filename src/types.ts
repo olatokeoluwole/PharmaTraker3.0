@@ -1,11 +1,19 @@
-export type Role = 'admin' | 'doctor' | 'branch' | 'store' | 'pending' | 'hmo';
+export type Role = 'super_admin' | 'admin' | 'doctor' | 'branch' | 'store' | 'pending' | 'hmo';
+
+export interface Organization {
+  id: string;
+  name: string;
+  status: 'active' | 'suspended';
+  createdAt: number;
+}
 
 export interface UserProfile {
   id: string;
   email: string;
   name: string;
   role: Role;
-  locationId?: string; // which branch they are assigned to
+  locationId?: string;
+  organizationId?: string;
 }
 
 export interface Drug {
@@ -14,10 +22,11 @@ export interface Drug {
   quantity?: number;
   unit?: string;
   category?: string;
-  costPrice?: number; // Cost price per unit
-  sellingPrice?: number; // Selling price per unit
-  branchStock?: { [locationId: string]: number }; // Maps locationId to quantity
+  costPrice?: number;
+  sellingPrice?: number;
+  branchStock?: { [locationId: string]: number };
   createdAt: number;
+  organizationId?: string;
 }
 
 export interface ConsumableUsageRecord {
@@ -29,6 +38,7 @@ export interface ConsumableUsageRecord {
   quantityUsed: number;
   department?: string;
   createdAt: number;
+  organizationId?: string;
 }
 
 export interface InternalTransferRecord {
@@ -39,6 +49,7 @@ export interface InternalTransferRecord {
   drugName: string;
   quantityTransferred: number;
   createdAt: number;
+  organizationId?: string;
 }
 
 export interface Prescription {
@@ -54,6 +65,7 @@ export interface Prescription {
   status: 'pending' | 'dispensed';
   targetBranchId?: string;
   createdAt: number;
+  organizationId?: string;
 }
 
 export interface DispenseRecord {
@@ -69,6 +81,7 @@ export interface DispenseRecord {
   patientName?: string;
   paymentMethod?: 'cash' | 'card' | 'transfer' | 'insurance' | 'other';
   createdAt: number;
+  organizationId?: string;
 }
 
 export interface PurchaseRecord {
@@ -84,6 +97,7 @@ export interface PurchaseRecord {
   invoiceNumber?: string;
   expiryDate?: string;
   createdAt: number;
+  organizationId?: string;
 }
 
 export type ExpenseCategory = 
@@ -104,11 +118,12 @@ export interface OperatingExpense {
   category: ExpenseCategory;
   customCategory?: string;
   amount: number;
-  expenseDate: string; // YYYY-MM-DD
+  expenseDate: string;
   description: string;
   paymentMethod?: 'cash' | 'transfer' | 'card' | 'cheque' | 'other';
   referenceNumber?: string;
   createdAt: number;
+  organizationId?: string;
 }
 
 export interface AuditReport {
@@ -123,6 +138,7 @@ export interface AuditReport {
   notes: string;
   adminId: string;
   createdAt: number;
+  organizationId?: string;
 }
 
 export interface DisposalRecord {
@@ -135,9 +151,8 @@ export interface DisposalRecord {
   adminId: string;
   adminName: string;
   createdAt: number;
+  organizationId?: string;
 }
-
-
 
 export interface InterBranchTransfer {
   id: string;
@@ -153,6 +168,7 @@ export interface InterBranchTransfer {
   approvedByName?: string;
   createdAt: number;
   updatedAt: number;
+  organizationId?: string;
 }
 
 export interface PharmacyBranch {
@@ -161,4 +177,5 @@ export interface PharmacyBranch {
   address: string;
   email: string;
   createdAt: number;
+  organizationId?: string;
 }
