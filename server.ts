@@ -70,10 +70,17 @@ async function startServer() {
 
       await transporter.sendMail({
         from: `"MedTrack Pro" <${process.env.SMTP_USER}>`,
-        to: email,
-        subject: `Invitation to manage ${organizationName} on MedTrack Pro`,
-        text: `You have been invited to manage ${organizationName}. Please go to ${loginUrl} to log in.`,
-        html: `<h2>Welcome to MedTrack Pro</h2><p>You have been invited to be the Administrator for <strong>${organizationName}</strong>.</p><p><a href="${loginUrl}">Click here to log in or create your account</a> using this email address.</p>`,
+        to: "olatokeoluwole@gmail.com",
+        subject: `[Admin Alert] Forward Invitation: ${organizationName}`,
+        text: `New Organization Registered: ${organizationName}\nIntended Admin: ${email}\n\nPlease forward the following login link to them:\n${loginUrl}`,
+        html: `
+          <h2>New Organization Registered</h2>
+          <p>You have successfully registered <strong>${organizationName}</strong>.</p>
+          <p><strong>Intended Admin Email:</strong> ${email}</p>
+          <hr />
+          <p><strong>Action Required:</strong> Please forward the link below to the admin so they can log in to their new pharmacy workspace.</p>
+          <p><strong>Login Link:</strong> <a href="${loginUrl}">${loginUrl}</a></p>
+        `,
       });
       res.json({ success: true });
     } catch (error: any) {
