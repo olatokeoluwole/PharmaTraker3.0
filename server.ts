@@ -55,6 +55,33 @@ async function startServer() {
     }
   });
 
+  // API Route to send invitation email
+  app.post("/api/send-invitation", async (req, res) => {
+    const { email, organizationName, appUrl } = req.body;
+    if (!email || !organizationName) return res.status(400).json({ error: "Missing email or organizationName" });
+
+    try {
+      if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+        console.log(`[Email Stub] Invitation sent to ${email} for ${organizationName}. Please configure SMTP in .env to actually send.`);
+        return res.json({ success: true, stub: true });
+      }
+
+      const loginUrl = appUrl || process.env.VITE_APP_URL || req.headers.origin || "https://pharma-tracker.com";
+
+      await transporter.sendMail({
+        from: `"MedTrack Pro" <${process.env.SMTP_USER}>`,
+        to: email,
+        subject: `Invitation to manage ${organizationName} on MedTrack Pro`,
+        text: `You have been invited to manage ${organizationName}. Please go to ${loginUrl} to log in.`,
+        html: `<h2>Welcome to MedTrack Pro</h2><p>You have been invited to be the Administrator for <strong>${organizationName}</strong>.</p><p><a href="${loginUrl}">Click here to log in or create your account</a> using this email address.</p>`,
+      });
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Failed to send invitation email:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

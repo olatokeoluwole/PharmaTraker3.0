@@ -48,6 +48,21 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
         name: 'Pharmacy Admin',
       }, { merge: true });
 
+      // 3. Send email via backend API
+      try {
+        await fetch('/api/send-invitation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: cleanEmail,
+            organizationName: newOrgName,
+            appUrl: window.location.origin
+          })
+        });
+      } catch (emailErr) {
+        console.error("Failed to send invite email", emailErr);
+      }
+
       setNewOrgName('');
       setAdminEmail('');
       setShowOrgModal(false);
