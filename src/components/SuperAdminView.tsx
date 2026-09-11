@@ -148,6 +148,32 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
         </button>
       </div>
 
+      {/* Permanent Client Link Section */}
+      <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-bold text-indigo-900 flex items-center gap-2">
+            🔗 Permanent Client Portal Link
+          </h3>
+          <p className="text-xs text-indigo-700 mt-1 max-w-2xl">
+            This is your universal platform link. After registering a business above, you can simply send them this link via WhatsApp or Email. When they click it, they just need to sign up using the exact email address you registered them with to automatically access their new workspace.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <code className="bg-white px-3 py-2 rounded-lg border border-indigo-100 text-xs text-indigo-600 truncate max-w-[200px] md:max-w-xs">
+            {window.location.origin}
+          </code>
+          <button 
+            onClick={() => {
+              navigator.clipboard.writeText(window.location.origin);
+              alert('Universal link copied to clipboard!');
+            }} 
+            className="bg-indigo-600 text-white px-3 py-2 rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors"
+          >
+            Copy Link
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-2">
