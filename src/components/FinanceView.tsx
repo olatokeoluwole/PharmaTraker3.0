@@ -129,7 +129,7 @@ export default function FinanceView({
       const updateData: Record<string, any> = {
         sellingPrice: finalSellingPrice,
         costPrice: finalCostPrice,
-        lastPriceUpdatedAt: Date.now(),
+        
         lastPriceUpdatedBy: profile?.name || profile?.email || 'Admin'
       };
 

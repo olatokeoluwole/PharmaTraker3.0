@@ -58,7 +58,7 @@ export default function StoreView({ profile, readOnly = false }: { profile: User
         fromLocationId: locId,
         toLocationId: targetLocation,
         status: 'approved',
-        updatedAt: Date.now(),
+        
         quantityTransferred: transferQuantity,
         createdAt: Date.now()
       });

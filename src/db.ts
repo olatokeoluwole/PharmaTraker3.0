@@ -142,7 +142,8 @@ export async function getDocs(queryRef: any) {
   }
   const { data, error } = await sbQuery;
   if (error) { console.error("getDocs error", error); throw error; }
-  return { docs: (data || []).map(d => ({ id: d.id, data: () => fromSupabaseData(d) })) };
+  const pk = getPrimaryKey(table);
+  return { docs: (data || []).map(d => ({ id: d[pk], data: () => fromSupabaseData(d) })) };
 }
 
 export function writeBatch(dbRef: any) {
@@ -188,7 +189,11 @@ export function onSnapshot(ref: any, onNext: (snap: any) => void, onError?: (err
         });
       }
     }
-    onNext({ docs: sorted.map(d => ({ id: d.id, data: () => d })) });
+    onNext({ docs: sorted.map(d => {
+      const pk = getPrimaryKey(table);
+      const camelPk = toCamel(pk);
+      return { id: d[camelPk], data: () => d };
+    }) });
   };
 
   let sbQuery = supabase.from(table).select('*');
@@ -212,13 +217,15 @@ export function onSnapshot(ref: any, onNext: (snap: any) => void, onError?: (err
 
   const channel = supabase.channel(`public:${table}_${Math.random()}`)
     .on('postgres_changes', { event: '*', schema: 'public', table }, (payload) => {
+      const pk = getPrimaryKey(table);
+      const camelPk = toCamel(pk);
       if (payload.eventType === 'INSERT') {
         currentData.push(fromSupabaseData(payload.new));
       } else if (payload.eventType === 'UPDATE') {
         const updated = fromSupabaseData(payload.new);
-        currentData = currentData.map(item => item.id === updated.id ? updated : item);
+        currentData = currentData.map(item => item[camelPk] === updated[camelPk] ? updated : item);
       } else if (payload.eventType === 'DELETE') {
-        currentData = currentData.filter(item => item.id !== payload.old.id);
+        currentData = currentData.filter(item => item[camelPk] !== payload.old[pk]);
       }
       emit();
     })

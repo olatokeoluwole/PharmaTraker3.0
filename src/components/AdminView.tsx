@@ -162,7 +162,7 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
         const data = doc.data();
         return {
           id: doc.id,
-          email: data.email || (doc.id.includes('@') ? doc.id : ''),
+          email: data.email || (doc.id && doc.id.includes('@') ? doc.id : ''),
           name: data.name || '',
           role: (data.role || 'pending') as Role,
           ...data
@@ -267,7 +267,7 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
       await setDoc(doc(db, 'drugs', drugId), {
         costPrice: costVal,
         sellingPrice: sellVal,
-        lastPriceUpdatedAt: Date.now(),
+        
         lastPriceUpdatedBy: profile?.name || profile?.email || 'Admin'
       }, { merge: true });
       setEditingDrugId(null);
