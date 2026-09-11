@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { UserProfile, Organization } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { UserProfile, Organization, DispenseRecord } from '../types';
 import { db, collection, onSnapshot, addDoc, setDoc, doc } from '../db';
-import { Building2, Users, Plus, Shield } from 'lucide-react';
+import { Building2, Users, Plus, Shield, TrendingUp, Activity } from 'lucide-react';
 
 interface SuperAdminViewProps {
   profile: UserProfile;
@@ -9,13 +9,16 @@ interface SuperAdminViewProps {
 
 export default function SuperAdminView({ profile }: SuperAdminViewProps) {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [dispenseRecords, setDispenseRecords] = useState<any[]>([]);
+  const [staffRoles, setStaffRoles] = useState<any[]>([]);
+  
   const [showOrgModal, setShowOrgModal] = useState(false);
   const [newOrgName, setNewOrgName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
 
   useEffect(() => {
-    // We fetch all organizations
-    const unsub = onSnapshot(collection(db, 'organizations'), (snap) => {
+    // Fetch organizations
+    const unsubOrgs = onSnapshot(collection(db, 'organizations'), (snap) => {
       setOrganizations(snap.docs.map((d: any) => ({
         id: d.id,
         name: d.data().name,
@@ -24,8 +27,56 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
         ...d.data()
       })));
     });
-    return unsub;
+
+    // Fetch platform-wide dispense records for metrics
+    const unsubDispense = onSnapshot(collection(db, 'dispense_records'), (snap) => {
+      setDispenseRecords(snap.docs.map((d: any) => ({ ...d.data(), id: d.id })));
+    });
+
+    // Fetch platform-wide staff for metrics
+    const unsubStaff = onSnapshot(collection(db, 'staff_roles'), (snap) => {
+      setStaffRoles(snap.docs.map((d: any) => ({ ...d.data(), id: d.id })));
+    });
+
+    return () => {
+      unsubOrgs();
+      unsubDispense();
+      unsubStaff();
+    };
   }, []);
+
+  const orgMetrics = useMemo(() => {
+    const metrics: Record<string, { totalRevenue: number, staffCount: number, prescriptions: number }> = {};
+    
+    organizations.forEach(org => {
+      metrics[org.id] = { totalRevenue: 0, staffCount: 0, prescriptions: 0 };
+    });
+
+    dispenseRecords.forEach(record => {
+      if (record.organizationId && metrics[record.organizationId]) {
+        metrics[record.organizationId].totalRevenue += (record.totalAmount || 0);
+        metrics[record.organizationId].prescriptions += 1;
+      }
+    });
+
+    staffRoles.forEach(staff => {
+      if (staff.organizationId && metrics[staff.organizationId]) {
+        metrics[staff.organizationId].staffCount += 1;
+      }
+    });
+
+    return metrics;
+  }, [organizations, dispenseRecords, staffRoles]);
+
+  const globalMetrics = useMemo(() => {
+    const orgMetricsValues = Object.values(orgMetrics) as Array<{ totalRevenue: number, staffCount: number, prescriptions: number }>;
+    return {
+      totalRevenue: orgMetricsValues.reduce((acc, curr) => acc + curr.totalRevenue, 0),
+      totalPharmacies: organizations.length,
+      totalUsers: staffRoles.length,
+      totalPrescriptions: orgMetricsValues.reduce((acc, curr) => acc + curr.prescriptions, 0)
+    };
+  }, [orgMetrics, organizations, staffRoles]);
 
   const handleCreateOrganization = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,8 +100,9 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
       }, { merge: true });
 
       // 3. Send email via backend API
+      let inviteMessage = `Organization "${newOrgName}" created successfully! Admin invite sent to ${cleanEmail}.`;
       try {
-        await fetch('/api/send-invitation', {
+        const res = await fetch('/api/send-invitation', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -59,6 +111,11 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
             appUrl: window.location.origin
           })
         });
+        const data = await res.json();
+        
+        if (data.stub) {
+          inviteMessage = `Organization "${newOrgName}" created successfully!\n\nNOTE: You have not configured SMTP email settings in your Environment Variables yet, so the email was NOT sent.\n\nPlease copy this login link and send it to the admin manually:\n\n${data.link}`;
+        }
       } catch (emailErr) {
         console.error("Failed to send invite email", emailErr);
       }
@@ -66,7 +123,7 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
       setNewOrgName('');
       setAdminEmail('');
       setShowOrgModal(false);
-      alert(`Organization "${newOrgName}" created successfully! Admin invite sent to ${cleanEmail}.`);
+      alert(inviteMessage);
     } catch (err: any) {
       alert("Error creating organization: " + err.message);
     }
@@ -91,6 +148,39 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
         </button>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-slate-500">Platform Revenue</h3>
+            <TrendingUp className="w-5 h-5 text-emerald-500" />
+          </div>
+          <p className="text-2xl font-bold text-slate-800">
+            ₦{globalMetrics.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </p>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-slate-500">Total Pharmacies</h3>
+            <Building2 className="w-5 h-5 text-indigo-500" />
+          </div>
+          <p className="text-2xl font-bold text-slate-800">{globalMetrics.totalPharmacies}</p>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-slate-500">Total Users</h3>
+            <Users className="w-5 h-5 text-blue-500" />
+          </div>
+          <p className="text-2xl font-bold text-slate-800">{globalMetrics.totalUsers}</p>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-slate-500">Prescriptions</h3>
+            <Activity className="w-5 h-5 text-rose-500" />
+          </div>
+          <p className="text-2xl font-bold text-slate-800">{globalMetrics.totalPrescriptions}</p>
+        </div>
+      </div>
+
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center gap-2">
           <Building2 className="w-5 h-5 text-slate-500" />
@@ -103,37 +193,48 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
                 <th className="px-6 py-4 font-semibold">Business Name</th>
                 <th className="px-6 py-4 font-semibold">Tenant ID</th>
                 <th className="px-6 py-4 font-semibold">Status</th>
+                <th className="px-6 py-4 font-semibold">Staff</th>
+                <th className="px-6 py-4 font-semibold">Revenue</th>
                 <th className="px-6 py-4 font-semibold">Joined On</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {organizations.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-slate-500 text-sm">
+                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500 text-sm">
                     No organizations on the platform yet. Click "Onboard New Pharmacy" to begin.
                   </td>
                 </tr>
               ) : (
-                organizations.map(org => (
-                  <tr key={org.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-slate-800">{org.name}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <code className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">{org.id}</code>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
-                        org.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
-                      }`}>
-                        {org.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {new Date(org.createdAt).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))
+                organizations.map(org => {
+                  const m = orgMetrics[org.id] || { totalRevenue: 0, staffCount: 0, prescriptions: 0 };
+                  return (
+                    <tr key={org.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-slate-800">{org.name}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <code className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">{org.id.split('-')[0]}...</code>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                          org.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                        }`}>
+                          {org.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 font-medium text-slate-700">
+                        {m.staffCount}
+                      </td>
+                      <td className="px-6 py-4 font-medium text-slate-700">
+                        ₦{m.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600">
+                        {new Date(org.createdAt).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

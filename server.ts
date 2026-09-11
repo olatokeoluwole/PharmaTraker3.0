@@ -61,12 +61,12 @@ async function startServer() {
     if (!email || !organizationName) return res.status(400).json({ error: "Missing email or organizationName" });
 
     try {
+      const loginUrl = appUrl || process.env.VITE_APP_URL || req.headers.origin || "https://pharma-tracker.com";
+
       if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
         console.log(`[Email Stub] Invitation sent to ${email} for ${organizationName}. Please configure SMTP in .env to actually send.`);
-        return res.json({ success: true, stub: true });
+        return res.json({ success: true, stub: true, link: loginUrl });
       }
-
-      const loginUrl = appUrl || process.env.VITE_APP_URL || req.headers.origin || "https://pharma-tracker.com";
 
       await transporter.sendMail({
         from: `"MedTrack Pro" <${process.env.SMTP_USER}>`,
