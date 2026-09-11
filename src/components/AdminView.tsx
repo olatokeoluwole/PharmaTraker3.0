@@ -61,7 +61,7 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
         address: newBranchAddress,
         email: newBranchEmail,
         createdAt: Date.now(),
-        updatedAt: Date.now()
+        
       });
       setNewBranchName('');
       setNewBranchAddress('');
@@ -452,15 +452,15 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
       const emailKey = (email || '').trim().toLowerCase();
       
       if (isRegistered && userId) {
-        await setDoc(doc(db, 'users', userId), { locationId, updatedAt: Date.now() }, { merge: true });
+        await setDoc(doc(db, 'users', userId), { locationId }, { merge: true });
       }
       
       if (emailKey) {
         const matchingUsers = users.filter(u => (u.email || '').trim().toLowerCase() === emailKey);
         for (const mu of matchingUsers) {
-          await setDoc(doc(db, 'users', mu.id), { locationId, updatedAt: Date.now() }, { merge: true });
+          await setDoc(doc(db, 'users', mu.id), { locationId }, { merge: true });
         }
-        await setDoc(doc(db, 'staff_roles', emailKey), { locationId, updatedAt: Date.now() }, { merge: true });
+        await setDoc(doc(db, 'staff_roles', emailKey), { locationId }, { merge: true });
       }
     } catch (err) {
       alert('Error updating location: ' + err.message);
@@ -500,14 +500,14 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
     try {
       // 1. Update in `users` collection if user is registered or exists
       if (isRegistered && userId) {
-        await setDoc(doc(db, 'users', userId), { role: roleVal, email: emailKey || undefined, updatedAt: Date.now() }, { merge: true });
+        await setDoc(doc(db, 'users', userId), { role: roleVal, email: emailKey || undefined }, { merge: true });
       }
       
       // Update any matching users in users collection by email
       if (emailKey) {
         const matchingUsers = users.filter(u => (u.email || '').trim().toLowerCase() === emailKey);
         for (const mu of matchingUsers) {
-          await setDoc(doc(db, 'users', mu.id), { role: roleVal, updatedAt: Date.now() }, { merge: true });
+          await setDoc(doc(db, 'users', mu.id), { role: roleVal }, { merge: true });
         }
       }
 
@@ -516,7 +516,7 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
         await setDoc(doc(db, 'staff_roles', emailKey), {
           email: emailKey,
           role: roleVal,
-          updatedAt: Date.now()
+          
         }, { merge: true });
       }
 
@@ -586,7 +586,7 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
         name: staffName.trim() || normalizedEmail.split('@')[0],
         role: staffRole, locationId: staffRole === 'branch' ? staffLocationId : '',
         createdAt: Date.now(),
-        updatedAt: Date.now()
+        
       };
 
       // Optimistically update local staffRoles & roleOverrides state
@@ -601,7 +601,7 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
       // If this user is already registered in users collection, update their role immediately
       const existingUser = users.find(u => (u.email || '').trim().toLowerCase() === normalizedEmail);
       if (existingUser) {
-        await setDoc(doc(db, 'users', existingUser.id), { role: staffRole, updatedAt: Date.now() }, { merge: true });
+        await setDoc(doc(db, 'users', existingUser.id), { role: staffRole }, { merge: true });
         setUsers(prev => prev.map(u => u.id === existingUser.id ? { ...u, role: staffRole } : u));
       }
 
