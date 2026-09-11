@@ -520,15 +520,6 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
         }, { merge: true });
       }
 
-      // 3. If there was a separate doc ID in staff_roles that wasn't the email, update that as well
-      if (userId && userId !== emailKey) {
-        await setDoc(doc(db, 'staff_roles', userId), {
-          role: roleVal,
-          email: emailKey || undefined,
-          updatedAt: Date.now()
-        }, { merge: true });
-      }
-
       setRoleSuccessMessage(`Role successfully updated to ${roleVal.toUpperCase()} for ${emailKey || userId}`);
       setTimeout(() => setRoleSuccessMessage(null), 3500);
     } catch (err: any) {
@@ -574,9 +565,6 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
       }
       if (normalizedEmail) {
         await deleteDoc(doc(db, 'staff_roles', normalizedEmail));
-      }
-      if (!isRegistered && userId && userId !== normalizedEmail) {
-        await deleteDoc(doc(db, 'staff_roles', userId));
       }
       setRoleSuccessMessage(`Deleted user ${email}`);
       setTimeout(() => setRoleSuccessMessage(null), 3000);

@@ -68,47 +68,57 @@ export class Timestamp {
   toMillis() { return this.seconds * 1000 + this.nanoseconds / 1000000; }
 }
 
+function getPrimaryKey(table: string) {
+  if (table === 'staff_roles') return 'email';
+  return 'id';
+}
+
 export async function addDoc(colRef: any, data: any) {
   const table = colRef.path;
   const payload = toSupabasePayload(data);
   const { data: res, error } = await supabase.from(table).insert(payload).select().single();
   if (error) { console.error("addDoc error", error); throw error; }
-  return { id: res.id };
+  const pk = getPrimaryKey(table);
+  return { id: res[pk] };
 }
 
 export async function setDoc(docRef: any, data: any, options?: { merge?: boolean }) {
   const payload = toSupabasePayload(data);
-  payload.id = docRef.id;
+  const pk = getPrimaryKey(docRef.table);
+  payload[pk] = docRef.id;
   const { error } = await supabase.from(docRef.table).upsert(payload);
   if (error) { console.error("setDoc error", error); throw error; }
 }
 
 export async function updateDoc(docRef: any, data: any) {
   const payload = toSupabasePayload(data);
-  delete payload.id;
+  const pk = getPrimaryKey(docRef.table);
+  delete payload[pk];
   let hasIncrement = false;
   for (const k of Object.keys(payload)) {
     if (payload[k]?._type === 'increment') { hasIncrement = true; break; }
   }
   if (hasIncrement) {
-    const { data: existing } = await supabase.from(docRef.table).select('*').eq('id', docRef.id).single();
+    const { data: existing } = await supabase.from(docRef.table).select('*').eq(pk, docRef.id).single();
     if (existing) {
       for (const k of Object.keys(payload)) {
         if (payload[k]?._type === 'increment') payload[k] = (existing[k] || 0) + payload[k].value;
       }
     }
   }
-  const { error } = await supabase.from(docRef.table).update(payload).eq('id', docRef.id);
+  const { error } = await supabase.from(docRef.table).update(payload).eq(pk, docRef.id);
   if (error) { console.error("updateDoc error", error); throw error; }
 }
 
 export async function deleteDoc(docRef: any) {
-  const { error } = await supabase.from(docRef.table).delete().eq('id', docRef.id);
+  const pk = getPrimaryKey(docRef.table);
+  const { error } = await supabase.from(docRef.table).delete().eq(pk, docRef.id);
   if (error) { console.error("deleteDoc error", error); throw error; }
 }
 
 export async function getDoc(docRef: any) {
-  const { data, error } = await supabase.from(docRef.table).select('*').eq('id', docRef.id).maybeSingle();
+  const pk = getPrimaryKey(docRef.table);
+  const { data, error } = await supabase.from(docRef.table).select('*').eq(pk, docRef.id).maybeSingle();
   if (error) { console.error("getDoc error", error); throw error; }
   if (!data) return { exists: () => false, data: () => undefined, id: docRef.id };
   return { exists: () => true, id: docRef.id, data: () => fromSupabaseData(data) };
