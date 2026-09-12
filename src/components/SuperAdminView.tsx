@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { UserProfile, Organization, DispenseRecord } from '../types';
-import { db, collection, onSnapshot, addDoc, setDoc, doc } from '../db';
-import { Building2, Users, Plus, Shield, TrendingUp, Activity } from 'lucide-react';
+import { db, collection, onSnapshot, addDoc, setDoc, doc, query, where } from '../db';
+import { Building2, Users, Plus, Shield, TrendingUp, Activity, X } from 'lucide-react';
 
 interface SuperAdminViewProps {
   profile: UserProfile;
@@ -15,6 +15,17 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
   const [showOrgModal, setShowOrgModal] = useState(false);
   const [newOrgName, setNewOrgName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
+
+  const [selectedOrgForView, setSelectedOrgForView] = useState<Organization | null>(null);
+  const [orgInventory, setOrgInventory] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!selectedOrgForView) return;
+    const unsub = onSnapshot(query(collection(db, 'drugs'), where('organizationId', '==', selectedOrgForView.id)), (snap) => {
+      setOrgInventory(snap.docs.map((d: any) => ({ ...d.data(), id: d.id })));
+    });
+    return unsub;
+  }, [selectedOrgForView]);
 
   useEffect(() => {
     // Fetch organizations
@@ -222,12 +233,13 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
                 <th className="px-6 py-4 font-semibold">Staff</th>
                 <th className="px-6 py-4 font-semibold">Revenue</th>
                 <th className="px-6 py-4 font-semibold">Joined On</th>
+                <th className="px-6 py-4 font-semibold text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {organizations.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500 text-sm">
+                  <td colSpan={7} className="px-6 py-8 text-center text-slate-500 text-sm">
                     No organizations on the platform yet. Click "Onboard New Pharmacy" to begin.
                   </td>
                 </tr>
@@ -257,6 +269,14 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600">
                         {new Date(org.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          onClick={() => setSelectedOrgForView(org)}
+                          className="text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          View Data
+                        </button>
                       </td>
                     </tr>
                   );
@@ -322,6 +342,141 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {selectedOrgForView && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-end z-50">
+          <div className="bg-white h-full w-full max-w-2xl shadow-xl flex flex-col animate-in slide-in-from-right">
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">{selectedOrgForView.name}</h2>
+                <p className="text-sm text-slate-500">Super Admin Data Viewer (Read-Only)</p>
+              </div>
+              <button 
+                onClick={() => setSelectedOrgForView(null)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-8">
+              {/* Staff Section */}
+              <section>
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Users className="w-4 h-4 text-indigo-500" />
+                  Staff Members
+                </h3>
+                <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-4 py-3 font-medium text-slate-500 border-b border-slate-200">Name / Email</th>
+                        <th className="px-4 py-3 font-medium text-slate-500 border-b border-slate-200">Role</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {staffRoles.filter(s => s.organizationId === selectedOrgForView.id).map(staff => (
+                        <tr key={staff.id} className="hover:bg-slate-50">
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-slate-800">{staff.name || 'Unknown'}</div>
+                            <div className="text-xs text-slate-500">{staff.email}</div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">
+                              {staff.role}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              {/* Inventory Section */}
+              <section>
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-emerald-500" />
+                  Current Inventory
+                </h3>
+                <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-4 py-3 font-medium text-slate-500 border-b border-slate-200">Drug Name</th>
+                        <th className="px-4 py-3 font-medium text-slate-500 border-b border-slate-200 text-right">Stock</th>
+                        <th className="px-4 py-3 font-medium text-slate-500 border-b border-slate-200 text-right">Price</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {orgInventory.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="px-4 py-6 text-center text-slate-500">No inventory found.</td>
+                        </tr>
+                      ) : (
+                        orgInventory.map(item => (
+                          <tr key={item.id} className="hover:bg-slate-50">
+                            <td className="px-4 py-3 font-medium text-slate-800">{item.name}</td>
+                            <td className="px-4 py-3 text-right font-medium text-slate-700">
+                              <span className={item.quantity < 20 ? 'text-rose-600 font-bold' : ''}>
+                                {item.quantity}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right text-slate-600">₦{item.price?.toLocaleString()}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              {/* Recent Transactions Section */}
+              <section>
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-blue-500" />
+                  Recent Transactions
+                </h3>
+                <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-4 py-3 font-medium text-slate-500 border-b border-slate-200">Date</th>
+                        <th className="px-4 py-3 font-medium text-slate-500 border-b border-slate-200">Items</th>
+                        <th className="px-4 py-3 font-medium text-slate-500 border-b border-slate-200 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {dispenseRecords
+                        .filter(r => r.organizationId === selectedOrgForView.id)
+                        .sort((a, b) => b.timestamp - a.timestamp)
+                        .slice(0, 10)
+                        .map(record => (
+                        <tr key={record.id} className="hover:bg-slate-50">
+                          <td className="px-4 py-3 text-slate-600">
+                            {new Date(record.timestamp).toLocaleDateString()}
+                          </td>
+                          <td className="px-4 py-3 text-slate-800">
+                            {record.items?.length || 0} items
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold text-emerald-600">
+                            ₦{record.totalAmount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      ))}
+                      {dispenseRecords.filter(r => r.organizationId === selectedOrgForView.id).length === 0 && (
+                        <tr>
+                          <td colSpan={3} className="px-4 py-6 text-center text-slate-500">No recent transactions.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
           </div>
         </div>
       )}

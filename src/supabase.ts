@@ -10,7 +10,8 @@ const getEnv = (key: string) => {
   return undefined;
 };
 
-const supabaseUrl = getEnv('VITE_SUPABASE_URL') || 'https://wmcmzrnqhgopxyvkytrn.supabase.co';
+const supabaseUrlRaw = getEnv('VITE_SUPABASE_URL') || 'https://wmcmzrnqhgopxyvkytrn.supabase.co';
+const supabaseUrl = supabaseUrlRaw.replace(/\/rest\/v1\/?$/, '');
 const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY') || 'sb_publishable_5q-Om1BrJ5GLTSI6soaNjQ_Vcqix1Nj';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
