@@ -271,13 +271,51 @@ export default function App() {
     }
   };
 
-  const handleManualLogout = async () => {
+  const handleManualLogout = async (reason?: string) => {
     localStorage.setItem('pharmatracker_manual_logout', 'true');
     localStorage.removeItem('pharmatracker_active_session');
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
+    if (reason) {
+      alert(reason);
+    }
   };
+
+  useEffect(() => {
+    if (!user || !profile) return;
+
+    let inactivityTimer: any;
+    const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+    const resetTimer = () => {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        handleManualLogout("You have been automatically logged out due to 5 minutes of inactivity for security purposes.");
+      }, TIMEOUT_MS);
+    };
+
+    // Initialize timer
+    resetTimer();
+
+    // Listeners for user activity
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+    
+    const handleActivity = () => {
+      resetTimer();
+    };
+
+    events.forEach(event => {
+      window.addEventListener(event, handleActivity);
+    });
+
+    return () => {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      events.forEach(event => {
+        window.removeEventListener(event, handleActivity);
+      });
+    };
+  }, [user, profile]);
 
   if (loading) {
     return (
