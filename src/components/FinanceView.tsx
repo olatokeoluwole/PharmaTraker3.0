@@ -474,92 +474,92 @@ export default function FinanceView({
       {/* Primary Financial Metric Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Sales Income */}
-        <div className="bg-white p-4 rounded-xl border border-emerald-200 shadow-sm relative overflow-hidden flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 border-t-4 border-t-emerald-500 shadow-sm relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Income from Sales</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Income from Sales</span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 ring-1 ring-emerald-500/20 flex items-center justify-center">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
           <div className="my-2">
-            <div className="text-2xl font-black text-slate-900">{formatCurrency(totalSalesIncome)}</div>
+            <div className="text-2xl font-black tracking-tight text-emerald-600 tabular-nums">{formatCurrency(totalSalesIncome)}</div>
             <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
-              <span className="font-semibold text-emerald-600">{filteredDispenses.length}</span> sales transactions
+              <span className="font-bold text-emerald-700 px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-100">{filteredDispenses.length}</span> sales transactions
             </div>
           </div>
           <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-500 flex justify-between">
             <span>Prescription & OTC Sales</span>
-            <span className="text-emerald-600 font-bold">Revenue</span>
+            <span className="text-emerald-600 font-bold uppercase tracking-wider">Revenue Inflow</span>
           </div>
         </div>
 
         {/* Drug Cost Expenditure */}
-        <div className="bg-white p-4 rounded-xl border border-indigo-200 shadow-sm relative overflow-hidden flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 border-t-4 border-t-indigo-500 shadow-sm relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-700">Drug Cost (Purchases)</span>
-            <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-700">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-800">Drug Cost (Purchases)</span>
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 ring-1 ring-indigo-500/20 flex items-center justify-center">
               <ShoppingBag className="w-4 h-4" />
             </div>
           </div>
           <div className="my-2">
-            <div className="text-2xl font-black text-slate-900">{formatCurrency(totalDrugExpenditure)}</div>
+            <div className="text-2xl font-black tracking-tight text-indigo-600 tabular-nums">{formatCurrency(totalDrugExpenditure)}</div>
             <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
-              <span className="font-semibold text-indigo-600">{filteredPurchases.length}</span> purchase batches
+              <span className="font-bold text-indigo-700 px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-100">{filteredPurchases.length}</span> purchase batches
             </div>
           </div>
           <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-500 flex justify-between">
             <span>Inventory Cost of Goods</span>
-            <span className="text-indigo-600 font-bold">Stock Intake</span>
+            <span className="text-indigo-600 font-bold uppercase tracking-wider">Stock Outflow</span>
           </div>
         </div>
 
         {/* Operating Costs (Salaries, Fuel, Maintenance, Utilities) */}
-        <div className="bg-white p-4 rounded-xl border border-orange-200 shadow-sm relative overflow-hidden flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 border-t-4 border-t-amber-500 shadow-sm relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-orange-700">Operating Costs (OPEX)</span>
-            <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center text-orange-700">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800">Operating Costs (OPEX)</span>
+            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 ring-1 ring-amber-500/20 flex items-center justify-center">
               <Receipt className="w-4 h-4" />
             </div>
           </div>
           <div className="my-2">
-            <div className="text-2xl font-black text-slate-900">{formatCurrency(totalOperatingExpenditure)}</div>
+            <div className="text-2xl font-black tracking-tight text-amber-600 tabular-nums">{formatCurrency(totalOperatingExpenditure)}</div>
             <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
-              <span className="font-semibold text-orange-600">{filteredExpenses.length}</span> logged expense items
+              <span className="font-bold text-amber-700 px-1.5 py-0.5 rounded bg-amber-50 border border-amber-100">{filteredExpenses.length}</span> logged expense items
             </div>
           </div>
           <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-500 flex justify-between">
             <span>Salaries, Fuel, Utilities & Repairs</span>
-            <span className="text-orange-600 font-bold">Running Cost</span>
+            <span className="text-amber-600 font-bold uppercase tracking-wider">Running Cost</span>
           </div>
         </div>
 
         {/* Net Profit / Balance */}
-        <div className={`bg-white p-4 rounded-xl border shadow-sm relative overflow-hidden flex flex-col justify-between ${
-          netProfit >= 0 ? 'border-indigo-300' : 'border-red-300'
+        <div className={`bg-white p-4 rounded-xl border border-slate-200 border-t-4 shadow-sm relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-shadow ${
+          netProfit >= 0 ? 'border-t-emerald-500' : 'border-t-rose-500'
         }`}>
           <div className="flex items-center justify-between">
             <span className={`text-[11px] font-bold uppercase tracking-wider ${
-              netProfit >= 0 ? 'text-indigo-700' : 'text-red-700'
+              netProfit >= 0 ? 'text-emerald-800' : 'text-rose-800'
             }`}>
               Net Business Balance
             </span>
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-              netProfit >= 0 ? 'bg-indigo-100 text-indigo-700' : 'bg-red-100 text-red-700'
+            <div className={`w-8 h-8 rounded-lg ring-1 flex items-center justify-center ${
+              netProfit >= 0 ? 'bg-emerald-50 text-emerald-600 ring-emerald-500/20' : 'bg-rose-50 text-rose-600 ring-rose-500/20'
             }`}>
               {netProfit >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
             </div>
           </div>
           <div className="my-2">
-            <div className={`text-2xl font-black ${netProfit >= 0 ? 'text-indigo-950' : 'text-red-600'}`}>
+            <div className={`text-2xl font-black tracking-tight tabular-nums ${netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {formatCurrency(netProfit)}
             </div>
             <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold ${
-                netProfit >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                netProfit >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
               }`}>
                 {netProfit >= 0 ? 'NET PROFIT' : 'NET DEFICIT'}
               </span>
-              <span>Margin: {profitMarginPercent}%</span>
+              <span className="font-semibold text-slate-600">Margin: {profitMarginPercent}%</span>
             </div>
           </div>
           <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-500 flex justify-between">
@@ -571,43 +571,43 @@ export default function FinanceView({
 
       {/* Operating Expense Specific Highlights (Salaries, Fuel, Maintenance, Electricity) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+        <div className="bg-white border border-slate-200 border-l-4 border-l-indigo-500 p-3 rounded-xl shadow-xs flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500/20 flex items-center justify-center shrink-0">
             <Briefcase className="w-4 h-4" />
           </div>
           <div className="min-w-0">
             <div className="text-[10px] font-bold text-slate-500 uppercase truncate">Salaries & Wages</div>
-            <div className="text-sm font-bold text-slate-900 truncate">{formatCurrency(salariesCost)}</div>
+            <div className="text-sm font-black text-indigo-700 truncate tabular-nums">{formatCurrency(salariesCost)}</div>
           </div>
         </div>
 
-        <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center shrink-0">
+        <div className="bg-white border border-slate-200 border-l-4 border-l-amber-500 p-3 rounded-xl shadow-xs flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-amber-50 text-amber-700 ring-1 ring-amber-500/20 flex items-center justify-center shrink-0">
             <Fuel className="w-4 h-4" />
           </div>
           <div className="min-w-0">
             <div className="text-[10px] font-bold text-slate-500 uppercase truncate">Generator Fuel</div>
-            <div className="text-sm font-bold text-slate-900 truncate">{formatCurrency(fuelCost)}</div>
+            <div className="text-sm font-black text-amber-600 truncate tabular-nums">{formatCurrency(fuelCost)}</div>
           </div>
         </div>
 
-        <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-red-100 text-red-700 flex items-center justify-center shrink-0">
+        <div className="bg-white border border-slate-200 border-l-4 border-l-rose-500 p-3 rounded-xl shadow-xs flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-rose-50 text-rose-700 ring-1 ring-rose-500/20 flex items-center justify-center shrink-0">
             <Wrench className="w-4 h-4" />
           </div>
           <div className="min-w-0">
             <div className="text-[10px] font-bold text-slate-500 uppercase truncate">Generator Maintenance</div>
-            <div className="text-sm font-bold text-slate-900 truncate">{formatCurrency(maintenanceCost)}</div>
+            <div className="text-sm font-black text-rose-600 truncate tabular-nums">{formatCurrency(maintenanceCost)}</div>
           </div>
         </div>
 
-        <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-yellow-100 text-yellow-700 flex items-center justify-center shrink-0">
+        <div className="bg-white border border-slate-200 border-l-4 border-l-yellow-500 p-3 rounded-xl shadow-xs flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-yellow-50 text-yellow-700 ring-1 ring-yellow-500/20 flex items-center justify-center shrink-0">
             <Zap className="w-4 h-4" />
           </div>
           <div className="min-w-0">
             <div className="text-[10px] font-bold text-slate-500 uppercase truncate">Electricity & Utilities</div>
-            <div className="text-sm font-bold text-slate-900 truncate">{formatCurrency(electricityCost)}</div>
+            <div className="text-sm font-black text-yellow-600 truncate tabular-nums">{formatCurrency(electricityCost)}</div>
           </div>
         </div>
       </div>

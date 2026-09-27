@@ -198,8 +198,13 @@ export default function StoreView({ profile, readOnly = false }: { profile: User
                       <td className="px-4 py-3 text-slate-600 capitalize">
                         {drug.category || 'medication'}
                       </td>
-                      <td className="px-4 py-3 text-right font-bold text-slate-900">
-                        {drug.branchStock?.[locId] || 0}
+                      <td className="px-4 py-3 text-right font-black tabular-nums">
+                        {(() => {
+                          const qty = drug.branchStock?.[locId] || 0;
+                          if (qty <= 0) return <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 text-xs">0 (Depleted)</span>;
+                          if (qty <= 15) return <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-xs">{qty} (Low)</span>;
+                          return <span className="text-sky-700 font-bold">{qty}</span>;
+                        })()}
                       </td>
                     </tr>
                   ))}

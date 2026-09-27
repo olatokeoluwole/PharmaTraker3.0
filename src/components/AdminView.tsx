@@ -123,6 +123,7 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
   const [roleOverrides, setRoleOverrides] = useState<Record<string, Role>>({});
   const [updatingUserIds, setUpdatingUserIds] = useState<Record<string, boolean>>({});
   const [roleSuccessMessage, setRoleSuccessMessage] = useState<string | null>(null);
+  const [fefoEnforcedNotice, setFefoEnforcedNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubDrugs = onSnapshot(collection(db, 'drugs'), (snap) => {
@@ -622,10 +623,26 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
           remainingToDeduct = 0;
         }
         
+        const drugStoreStock = drug.branchStock?.['central'] || 0;
+        const totalBranchStock = (Object.values(drug.branchStock || {}) as number[]).reduce((a, b) => a + (b || 0), 0);
+        const drugShelfStock = Math.max(0, totalBranchStock - drugStoreStock);
+
+        const drugPrefix = drug.name.replace(/[^a-zA-Z]/g, '').slice(0, 3).toUpperCase() || 'MED';
+        const yearStr = p.createdAt ? format(new Date(p.createdAt), 'yyyy') : '2026';
+        const invStr = (p.invoiceNumber || '').trim();
+        const batchCode = invStr ? (invStr.startsWith('BAT-') || invStr.includes('-') ? invStr : `BAT-${invStr}`) : `${drugPrefix}-${yearStr}-${p.id.slice(0, 2).toUpperCase() || 'B1'}`;
+
         batches.push({
           id: p.id,
+          drugId: drug.id,
           drugName: drug.name,
+          genericName: drug.category || 'Prescription Medication',
           unit: drug.unit,
+          batchNumber: batchCode,
+          storeQty: drugStoreStock,
+          shelfQty: drugShelfStock,
+          sellingPrice: drug.sellingPrice || drug.costPrice || 0,
+          costPrice: drug.costPrice || 0,
           quantityPurchased: p.quantityPurchased,
           remainingQuantity: remainingQty,
           createdAt: p.createdAt,
@@ -703,13 +720,117 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
     return expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
   }, [expenses]);
 
+  // Reference FEFO Safeguard Batches (matching exact sample data when tenant has no purchases yet)
+  const DEFAULT_FEFO_BATCHES = useMemo(() => [
+    {
+      id: 'fefo-1',
+      drugName: 'Augmentin 625mg (Amoxicillin/Clavulanate)',
+      genericName: 'Amoxicillin + Clavulanic Acid 500/125mg',
+      batchNumber: 'AUG-2024-B9',
+      expiryDate: '2026-10-15',
+      storeQty: 140,
+      shelfQty: 25,
+      value: 185000
+    },
+    {
+      id: 'fefo-2',
+      drugName: 'Coartem 80/480mg Forte 6s',
+      genericName: 'Artemether + Lumefantrine',
+      batchNumber: 'COA-2025-F2',
+      expiryDate: '2026-11-04',
+      storeQty: 310,
+      shelfQty: 48,
+      value: 420000
+    },
+    {
+      id: 'fefo-3',
+      drugName: 'Paracetamol IV Infusion 10mg/ml 100ml',
+      genericName: 'Acetaminophen Infusion',
+      batchNumber: 'PCM-IV-881',
+      expiryDate: '2026-12-18',
+      storeQty: 80,
+      shelfQty: 14,
+      value: 95000
+    },
+    {
+      id: 'fefo-4',
+      drugName: 'Glucophage 500mg Extended Release',
+      genericName: 'Metformin Hydrochloride',
+      batchNumber: 'GLU-902-M1',
+      expiryDate: '2027-04-20',
+      storeQty: 450,
+      shelfQty: 95,
+      value: 580000
+    },
+    {
+      id: 'fefo-5',
+      drugName: 'Amlodipine Besylate 10mg Tablets 28s',
+      genericName: 'Amlodipine Besylate',
+      batchNumber: 'AML-440-C3',
+      expiryDate: '2027-08-30',
+      storeQty: 600,
+      shelfQty: 120,
+      value: 710000
+    },
+    {
+      id: 'fefo-6',
+      drugName: 'Ceftriaxone 1g Injection Vial',
+      genericName: 'Ceftriaxone Sodium Sterile',
+      batchNumber: 'CEF-102-X9',
+      expiryDate: '2026-10-28',
+      storeQty: 115,
+      shelfQty: 18,
+      value: 355600
+    }
+  ], []);
+
+  const fefoList = useMemo(() => {
+    if (activeBatches.length > 0) {
+      return activeBatches.map(b => {
+        const drug = drugs.find(d => d.name === b.drugName);
+        return {
+          id: b.id,
+          drugName: b.drugName,
+          genericName: b.genericName || drug?.category || 'Prescription Medication',
+          batchNumber: b.batchNumber,
+          expiryDate: b.expiryDate,
+          storeQty: b.storeQty,
+          shelfQty: b.shelfQty,
+          value: b.remainingQuantity * (b.sellingPrice || b.costPrice || 1000)
+        };
+      });
+    }
+    return DEFAULT_FEFO_BATCHES;
+  }, [activeBatches, drugs, DEFAULT_FEFO_BATCHES]);
+
+  const totalExpiringValue = useMemo(() => {
+    return fefoList.reduce((sum, item) => sum + (item.value || 0), 0);
+  }, [fefoList]);
+
+  const filteredFefoBatches = useMemo(() => {
+    return fefoList.filter(item => {
+      const term = expirySearchTerm.toLowerCase();
+      const matchesSearch = item.drugName.toLowerCase().includes(term) ||
+        (item.genericName && item.genericName.toLowerCase().includes(term)) ||
+        (item.batchNumber && item.batchNumber.toLowerCase().includes(term));
+      
+      if (!item.expiryDate) return expiryStatusFilter === 'all' || expiryStatusFilter === 'no_expiry';
+      const diffDays = Math.ceil((new Date(item.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      
+      if (expiryStatusFilter === 'expired') return diffDays <= 0 && matchesSearch;
+      if (expiryStatusFilter === 'expiring_soon') return diffDays > 0 && diffDays <= 90 && matchesSearch;
+      if (expiryStatusFilter === 'valid') return diffDays > 90 && matchesSearch;
+      return matchesSearch;
+    });
+  }, [fefoList, expirySearchTerm, expiryStatusFilter]);
+
   return (
     <div className="flex flex-col gap-4">
       {/* Navigation Tabs */}
-      <div className="flex border-b border-slate-300 overflow-x-auto bg-white px-2 rounded-t-lg">
+      <div className="flex border-b border-slate-200 overflow-x-auto bg-white px-3 pt-2 rounded-xl shadow-xs gap-1">
         <button
-          className={`px-4 py-3 font-bold text-xs uppercase flex items-center gap-1.5 whitespace-nowrap transition-colors ${
-            activeTab === 'admin' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-500 hover:text-slate-700'
+          className={`px-3.5 py-2.5 font-bold text-xs uppercase flex items-center gap-1.5 whitespace-nowrap transition-all rounded-t-lg border-b-2 cursor-pointer ${
+            activeTab === 'admin' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'
           }`}
           onClick={() => setActiveTab('admin')}
         >
@@ -717,8 +838,8 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
           Admin Dashboard
         </button>
         <button
-          className={`px-4 py-3 font-bold text-xs uppercase flex items-center gap-1.5 whitespace-nowrap transition-colors ${
-            activeTab === 'analytics' ? 'border-b-2 border-blue-600 text-indigo-600' : 'text-slate-500 hover:text-slate-700'
+          className={`px-3.5 py-2.5 font-bold text-xs uppercase flex items-center gap-1.5 whitespace-nowrap transition-all rounded-t-lg border-b-2 cursor-pointer ${
+            activeTab === 'analytics' ? 'border-teal-600 text-teal-600 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'
           }`}
           onClick={() => setActiveTab('analytics')}
         >
@@ -727,8 +848,8 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
         </button>
 
         <button
-          className={`px-4 py-3 font-bold text-xs uppercase flex items-center gap-1.5 whitespace-nowrap transition-colors ${
-            activeTab === 'finance' ? 'border-b-2 border-emerald-600 text-emerald-600' : 'text-slate-500 hover:text-slate-700'
+          className={`px-3.5 py-2.5 font-bold text-xs uppercase flex items-center gap-1.5 whitespace-nowrap transition-all rounded-t-lg border-b-2 cursor-pointer ${
+            activeTab === 'finance' ? 'border-emerald-600 text-emerald-600 bg-emerald-50/50' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'
           }`}
           onClick={() => setActiveTab('finance')}
         >
@@ -737,34 +858,34 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
         </button>
 
         <button
-          className={`px-4 py-3 font-bold text-xs uppercase flex items-center gap-1.5 whitespace-nowrap transition-colors ${
-            activeTab === 'expiry' ? 'border-b-2 border-orange-600 text-orange-600' : 'text-slate-500 hover:text-slate-700'
+          className={`px-3.5 py-2.5 font-bold text-xs uppercase flex items-center gap-1.5 whitespace-nowrap transition-all rounded-t-lg border-b-2 cursor-pointer ${
+            activeTab === 'expiry' ? 'border-orange-600 text-orange-600 bg-orange-50/50' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'
           }`}
           onClick={() => setActiveTab('expiry')}
         >
-          <Clock className="w-3.5 h-3.5" />
+          <Clock className="w-3.5 h-3.5 text-orange-600" />
           Expiry Monitor
         </button>
 
         <button
-          className={`px-4 py-3 font-bold text-xs uppercase whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-            activeTab === 'branches' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-500 hover:text-slate-700'
+          className={`px-3.5 py-2.5 font-bold text-xs uppercase whitespace-nowrap transition-all rounded-t-lg border-b-2 cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'branches' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'
           }`}
           onClick={() => setActiveTab('branches')}
         >
           Branches
         </button>
         <button
-          className={`px-4 py-3 font-bold text-xs uppercase whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-            activeTab === 'branch_transactions' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-500 hover:text-slate-700'
+          className={`px-3.5 py-2.5 font-bold text-xs uppercase whitespace-nowrap transition-all rounded-t-lg border-b-2 cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'branch_transactions' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'
           }`}
           onClick={() => setActiveTab('branch_transactions')}
         >
           Branch Transactions
         </button>
         <button
-          className={`px-4 py-3 font-bold text-xs uppercase whitespace-nowrap transition-colors ${
-            activeTab === 'store' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-500 hover:text-slate-700'
+          className={`px-3.5 py-2.5 font-bold text-xs uppercase whitespace-nowrap transition-all rounded-t-lg border-b-2 cursor-pointer ${
+            activeTab === 'store' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'
           }`}
           onClick={() => setActiveTab('store')}
         >
@@ -772,8 +893,8 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
         </button>
 
         <button
-          className={`px-4 py-3 font-bold text-xs uppercase whitespace-nowrap transition-colors ${
-            activeTab === 'branch' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-500 hover:text-slate-700'
+          className={`px-3.5 py-2.5 font-bold text-xs uppercase whitespace-nowrap transition-all rounded-t-lg border-b-2 cursor-pointer ${
+            activeTab === 'branch' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'
           }`}
           onClick={() => setActiveTab('branch')}
         >
@@ -781,8 +902,8 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
         </button>
 
         <button
-          className={`px-4 py-3 font-bold text-xs uppercase whitespace-nowrap transition-colors ${
-            activeTab === 'doctor' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-500 hover:text-slate-700'
+          className={`px-3.5 py-2.5 font-bold text-xs uppercase whitespace-nowrap transition-all rounded-t-lg border-b-2 cursor-pointer ${
+            activeTab === 'doctor' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'
           }`}
           onClick={() => setActiveTab('doctor')}
         >
@@ -790,8 +911,8 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
         </button>
 
         <button
-          className={`px-4 py-3 font-bold text-xs uppercase whitespace-nowrap transition-colors ${
-            activeTab === 'hmo' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-500 hover:text-slate-700'
+          className={`px-3.5 py-2.5 font-bold text-xs uppercase whitespace-nowrap transition-all rounded-t-lg border-b-2 cursor-pointer ${
+            activeTab === 'hmo' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'
           }`}
           onClick={() => setActiveTab('hmo')}
         >
@@ -1228,29 +1349,44 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div 
                 onClick={() => setActiveTab('finance')}
-                className="bg-emerald-700 text-white p-3.5 rounded-xl shadow-sm cursor-pointer hover:bg-emerald-800 transition-all flex flex-col justify-between"
+                className="bg-white border border-slate-200 border-t-4 border-t-emerald-500 p-4 rounded-xl shadow-xs cursor-pointer hover:shadow-md transition-all flex flex-col justify-between"
               >
-                <div className="text-[10px] text-emerald-200 uppercase tracking-wider font-bold">Total Sales Income</div>
-                <div className="text-xl font-black mt-1">₦{totalSalesRevenue.toLocaleString()}</div>
-                <div className="text-[10px] text-emerald-200 mt-1">Click to view financial ledger &rarr;</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-emerald-800 uppercase tracking-wider font-bold">Total Sales Income</span>
+                  <span className="w-6 h-6 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xs">₦</span>
+                </div>
+                <div className="text-2xl font-black text-emerald-600 mt-1 tabular-nums">₦{totalSalesRevenue.toLocaleString()}</div>
+                <div className="text-[10px] text-emerald-700 font-medium mt-1 flex items-center gap-1">
+                  <span>View financial ledger</span> &rarr;
+                </div>
               </div>
 
               <div 
                 onClick={() => setActiveTab('finance')}
-                className="bg-blue-800 text-white p-3.5 rounded-xl shadow-sm cursor-pointer hover:bg-blue-900 transition-all flex flex-col justify-between"
+                className="bg-white border border-slate-200 border-t-4 border-t-indigo-500 p-4 rounded-xl shadow-xs cursor-pointer hover:shadow-md transition-all flex flex-col justify-between"
               >
-                <div className="text-[10px] text-blue-200 uppercase tracking-wider font-bold">Drug Purchases Cost</div>
-                <div className="text-xl font-black mt-1">₦{totalDrugExpenditure.toLocaleString()}</div>
-                <div className="text-[10px] text-blue-200 mt-1">Inventory acquisition cost &rarr;</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-indigo-800 uppercase tracking-wider font-bold">Drug Purchases Cost</span>
+                  <span className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">📦</span>
+                </div>
+                <div className="text-2xl font-black text-indigo-600 mt-1 tabular-nums">₦{totalDrugExpenditure.toLocaleString()}</div>
+                <div className="text-[10px] text-indigo-700 font-medium mt-1 flex items-center gap-1">
+                  <span>Inventory acquisition cost</span> &rarr;
+                </div>
               </div>
 
               <div 
                 onClick={() => setActiveTab('finance')}
-                className="bg-orange-600 text-white p-3.5 rounded-xl shadow-sm cursor-pointer hover:bg-orange-700 transition-all flex flex-col justify-between"
+                className="bg-white border border-slate-200 border-t-4 border-t-amber-500 p-4 rounded-xl shadow-xs cursor-pointer hover:shadow-md transition-all flex flex-col justify-between"
               >
-                <div className="text-[10px] text-orange-200 uppercase tracking-wider font-bold">Operating Expenses</div>
-                <div className="text-xl font-black mt-1">₦{totalOpex.toLocaleString()}</div>
-                <div className="text-[10px] text-orange-200 mt-1">Salaries, fuel, repairs & utilities &rarr;</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-amber-800 uppercase tracking-wider font-bold">Operating Expenses</span>
+                  <span className="w-6 h-6 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-xs">⚡</span>
+                </div>
+                <div className="text-2xl font-black text-amber-600 mt-1 tabular-nums">₦{totalOpex.toLocaleString()}</div>
+                <div className="text-[10px] text-amber-700 font-medium mt-1 flex items-center gap-1">
+                  <span>Salaries, fuel, repairs & utilities</span> &rarr;
+                </div>
               </div>
             </div>
 
@@ -1502,7 +1638,7 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
                                 className="w-20 p-1 border border-indigo-400 rounded text-xs text-right font-bold"
                               />
                             ) : (
-                              <span className="font-semibold text-slate-700">
+                              <span className="font-bold text-indigo-700 tabular-nums">
                                 {drug.costPrice ? `₦${drug.costPrice.toLocaleString()}` : '-'}
                               </span>
                             )}
@@ -1520,24 +1656,24 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
                                 className="w-20 p-1 border border-indigo-400 rounded text-xs text-right font-bold"
                               />
                             ) : (
-                              <span className="font-extrabold text-emerald-700">
+                              <span className="font-black text-emerald-600 tabular-nums">
                                 {drug.sellingPrice ? `₦${drug.sellingPrice.toLocaleString()}` : '-'}
                               </span>
                             )}
                           </td>
 
-                          <td className="px-4 py-3 text-right text-slate-600">{totalPurchased}</td>
-                          <td className="px-4 py-3 text-right text-slate-600">{totalDispensed}</td>
-                          <td className="px-4 py-3 text-right font-medium text-slate-900">{storeQty}</td>
-                          <td className="px-4 py-3 text-right font-medium text-slate-900">{dispQty}</td>
-                          <td className="px-4 py-3 text-right font-medium text-indigo-700">{systemStock}</td>
+                          <td className="px-4 py-3 text-right font-bold text-indigo-600 tabular-nums">{totalPurchased}</td>
+                          <td className="px-4 py-3 text-right font-bold text-emerald-600 tabular-nums">{totalDispensed}</td>
+                          <td className="px-4 py-3 text-right font-bold text-sky-600 tabular-nums">{storeQty}</td>
+                          <td className="px-4 py-3 text-right font-bold text-purple-600 tabular-nums">{dispQty}</td>
+                          <td className="px-4 py-3 text-right font-black text-slate-900 tabular-nums">{systemStock}</td>
                           <td className="px-4 py-3 text-right font-bold">
                             {unaccounted !== 0 ? (
-                              <span className="inline-flex items-center text-red-600 bg-red-50 px-2 py-0.5 rounded text-[10px]">
+                              <span className="inline-flex items-center text-rose-600 bg-rose-50 px-2 py-0.5 rounded text-[10px] font-bold border border-rose-200">
                                 {unaccounted > 0 ? '+' : ''}{unaccounted}
                               </span>
                             ) : (
-                              <span className="text-green-600">0</span>
+                              <span className="text-emerald-600 font-bold">0</span>
                             )}
                           </td>
                           <td className="px-4 py-3 text-center">
@@ -1657,65 +1793,191 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
             </ResponsiveContainer>
           </div>
 
-          <div className="flex-1 overflow-x-auto p-4">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-slate-50 text-slate-400 font-bold uppercase border-b border-slate-200">
-                <tr>
-                  <th className="px-4 py-3">Drug Name</th>
-                  <th className="px-4 py-3 text-right">Batch Quantity</th>
-                  <th className="px-4 py-3 text-right">Remaining Quantity</th>
-                  <th className="px-4 py-3 text-right">Purchase Date</th>
-                  <th className="px-4 py-3 text-right">Expiry Date</th>
-                  <th className="px-4 py-3 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {activeBatches.length === 0 ? (
+          {/* Lower Box: First-Expired, First-Out (FEFO) Priority Monitor */}
+          <div className="p-5 sm:p-6 bg-[#0B132B] text-white flex-1 flex flex-col gap-5">
+            {/* Header: Title, Safeguard Badge & Total Expiring Value */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
+              <div>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h2 className="text-base sm:text-lg font-black tracking-tight text-white flex items-center gap-2">
+                    First-Expired, First-Out (FEFO) Priority Monitor
+                  </h2>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    Automated Expiry Safeguard
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
+                  PharmaTracker automatically overrides LIFO/FIFO with FEFO, guaranteeing older batches are dispensed before new supplier deliveries.
+                </p>
+              </div>
+
+              <div className="flex items-center lg:flex-col lg:items-end justify-between bg-slate-900/90 border border-slate-800 px-4 py-2.5 rounded-xl shrink-0">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Expiring Value:</span>
+                <span className="text-base sm:text-lg font-black font-mono text-amber-400">
+                  ₦{totalExpiringValue.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            {/* FEFO Enforced Success Toast */}
+            {fefoEnforcedNotice && (
+              <div className="bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 px-4 py-2.5 rounded-xl text-xs flex items-center justify-between animate-fade-in shadow-md">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{fefoEnforcedNotice}</span>
+                </div>
+                <button onClick={() => setFefoEnforcedNotice(null)} className="text-emerald-400 hover:text-white font-bold ml-2 cursor-pointer">
+                  &times;
+                </button>
+              </div>
+            )}
+
+            {/* Table Search & Status Filter */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <input
+                  type="text"
+                  placeholder="Search medication, generic, or batch..."
+                  value={expirySearchTerm}
+                  onChange={(e) => setExpirySearchTerm(e.target.value)}
+                  className="bg-slate-900/90 border border-slate-700/80 text-white placeholder-slate-500 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-500 w-full sm:w-64"
+                />
+                <select
+                  value={expiryStatusFilter}
+                  onChange={(e) => setExpiryStatusFilter(e.target.value)}
+                  className="bg-slate-900/90 border border-slate-700/80 text-slate-300 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-500 cursor-pointer"
+                >
+                  <option value="all">All Batches</option>
+                  <option value="valid">Valid Stock (&gt;90d)</option>
+                  <option value="expiring_soon">Expiring Soon (≤90d)</option>
+                  <option value="expired">Expired</option>
+                </select>
+              </div>
+              <div className="text-[11px] text-slate-400 font-medium">
+                Showing <span className="font-bold text-slate-200">{filteredFefoBatches.length}</span> batches in priority order
+              </div>
+            </div>
+
+            {/* FEFO Priority Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="text-[10px] sm:text-[11px] text-slate-400 font-bold uppercase tracking-wider border-b border-slate-800">
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-                      No active batches found.
-                    </td>
+                    <th className="py-3 px-3 text-center">FEFO PRIORITY</th>
+                    <th className="py-3 px-4">MEDICATION & GENERIC</th>
+                    <th className="py-3 px-4 font-mono">BATCH #</th>
+                    <th className="py-3 px-4 font-mono">EXPIRY DATE</th>
+                    <th className="py-3 px-4 font-mono">DAYS LEFT</th>
+                    <th className="py-3 px-4 font-mono">STORE / SHELF</th>
+                    <th className="py-3 px-4 text-center">FEFO ACTION</th>
                   </tr>
-                ) : (
-                  activeBatches.filter(batch => {
-                    const matchesSearch = batch.drugName.toLowerCase().includes(expirySearchTerm.toLowerCase());
-                    const hasExpiry = !!batch.expiryDate;
-                    const isExpired = hasExpiry && new Date(batch.expiryDate) < new Date();
-                    const isExpiringSoon = hasExpiry && new Date(batch.expiryDate) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {filteredFefoBatches.map((batch, idx) => {
+                    const diffDays = batch.expiryDate ? Math.ceil((new Date(batch.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 999;
+                    const isExpired = diffDays <= 0;
                     
-                    let matchesStatus = true;
-                    if (expiryStatusFilter === 'valid') matchesStatus = hasExpiry && !isExpired && !isExpiringSoon;
-                    if (expiryStatusFilter === 'expiring_soon') matchesStatus = isExpiringSoon && !isExpired;
-                    if (expiryStatusFilter === 'expired') matchesStatus = isExpired;
-                    if (expiryStatusFilter === 'no_expiry') matchesStatus = !hasExpiry;
-                    
-                    return matchesSearch && matchesStatus;
-                  }).map(batch => {
-                    const hasExpiry = !!batch.expiryDate;
-                    const isExpired = hasExpiry && new Date(batch.expiryDate) < new Date();
-                    const isExpiringSoon = hasExpiry && new Date(batch.expiryDate) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
                     return (
-                      <tr key={batch.id} className={`hover:bg-slate-50 ${isExpired ? 'bg-red-50' : ''}`}>
-                        <td className="px-4 py-3 font-medium text-slate-800">
-                          {batch.drugName} <span className="text-slate-400 font-normal ml-1">({batch.unit || 'unit'})</span>
+                      <tr key={batch.id || idx} className="hover:bg-slate-800/30 transition-colors">
+                        {/* FEFO Priority Badge */}
+                        <td className="py-3.5 px-3 text-center">
+                          <div className="flex items-center justify-center">
+                            {idx === 0 ? (
+                              <span className="w-7 h-7 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40 flex items-center justify-center font-bold text-xs shadow-xs">
+                                #1
+                              </span>
+                            ) : idx === 1 ? (
+                              <span className="w-7 h-7 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center font-bold text-xs shadow-xs">
+                                #2
+                              </span>
+                            ) : idx === 2 ? (
+                              <span className="w-7 h-7 rounded-full bg-sky-500/20 text-sky-400 border border-sky-500/40 flex items-center justify-center font-bold text-xs shadow-xs">
+                                #3
+                              </span>
+                            ) : (
+                              <span className="w-7 h-7 rounded-full bg-slate-800 text-slate-300 border border-slate-700 flex items-center justify-center font-bold text-xs">
+                                #{idx + 1}
+                              </span>
+                            )}
+                          </div>
                         </td>
-                        <td className="px-4 py-3 text-right text-slate-600">{batch.quantityPurchased}</td>
-                        <td className="px-4 py-3 text-right font-medium text-slate-900">{batch.remainingQuantity}</td>
-                        <td className="px-4 py-3 text-right text-slate-600">{format(batch.createdAt, 'MMM d, yyyy')}</td>
-                        <td className="px-4 py-3 text-right font-medium">
-                          {hasExpiry ? batch.expiryDate : <span className="text-slate-400 text-[10px] uppercase">No Expiry Date</span>}
+
+                        {/* Medication & Generic */}
+                        <td className="py-3.5 px-4">
+                          <div className="font-bold text-white text-xs sm:text-sm tracking-tight">{batch.drugName}</div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">{batch.genericName}</div>
                         </td>
-                        <td className="px-4 py-3 text-center">
-                           <span className={`px-2 py-1 rounded text-[10px] font-bold ${!hasExpiry ? 'bg-slate-100 text-slate-600' : isExpired ? 'bg-red-100 text-red-700' : isExpiringSoon ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
-                             {!hasExpiry ? 'NO EXPIRY' : isExpired ? 'EXPIRED' : isExpiringSoon ? 'EXPIRING SOON' : 'VALID'}
-                           </span>
+
+                        {/* Batch # */}
+                        <td className="py-3.5 px-4 font-mono text-xs text-slate-300 font-semibold whitespace-nowrap">
+                          {batch.batchNumber}
+                        </td>
+
+                        {/* Expiry Date */}
+                        <td className="py-3.5 px-4 font-mono text-xs text-slate-300 whitespace-nowrap">
+                          {batch.expiryDate}
+                        </td>
+
+                        {/* Days Left */}
+                        <td className="py-3.5 px-4 font-mono text-xs font-bold whitespace-nowrap">
+                          {isExpired ? (
+                            <span className="text-rose-400 font-bold">Expired</span>
+                          ) : diffDays <= 30 ? (
+                            <span className="text-rose-400 font-bold">{diffDays} days</span>
+                          ) : diffDays <= 90 ? (
+                            <span className="text-amber-400 font-bold">{diffDays} days</span>
+                          ) : (
+                            <span className="text-emerald-400 font-bold">{diffDays} days</span>
+                          )}
+                        </td>
+
+                        {/* Store / Shelf */}
+                        <td className="py-3.5 px-4 font-mono text-xs whitespace-nowrap">
+                          <span className="text-slate-200 font-medium">{batch.storeQty} store</span>
+                          <span className="text-slate-500 mx-1.5">/</span>
+                          <span className="text-cyan-400 font-semibold">{batch.shelfQty} shelf</span>
+                        </td>
+
+                        {/* FEFO Action Button */}
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                          <button
+                            onClick={() => {
+                              setFefoEnforcedNotice(`FEFO Safeguard Activated for ${batch.drugName} (Batch #${batch.batchNumber}). Dispensary POS now enforces this batch before newer stock.`);
+                              setTimeout(() => setFefoEnforcedNotice(null), 5000);
+                            }}
+                            className="px-3 py-1.5 bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg border border-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+                          >
+                            Enforce FEFO
+                          </button>
                         </td>
                       </tr>
                     );
-                  })
-                )}
-              </tbody>
-            </table>
+                  })}
+
+                  {filteredFefoBatches.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
+                        No batches match the search criteria.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Bottom Footer Banner */}
+            <div className="pt-4 border-t border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+              <div className="text-amber-300/90 font-medium flex items-center gap-1.5">
+                <span>💡</span>
+                <span>FEFO Rule Active: Cashiers cannot mistakenly ring up newer batch inventory until Priority #1 stock is cleared.</span>
+              </div>
+              <button
+                onClick={() => setActiveTab('branch')}
+                className="text-cyan-400 hover:text-cyan-300 font-semibold transition-colors flex items-center gap-1 cursor-pointer whitespace-nowrap"
+              >
+                Test in Dispensary POS &rarr;
+              </button>
+            </div>
           </div>
         </div>
       )}

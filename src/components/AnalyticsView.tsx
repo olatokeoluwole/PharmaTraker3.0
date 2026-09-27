@@ -177,14 +177,16 @@ export default function AnalyticsView({ profile, drugs, purchases, dispenses }: 
       {/* Top Metric Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Today's Sales */}
-        <div className="bg-white p-4 border border-slate-200 shadow-sm flex flex-col justify-between">
+        <div className="bg-white p-4.5 rounded-xl border border-slate-200 border-t-4 border-t-emerald-500 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Today's Sales</span>
-            <DollarSign className="w-4 h-4 text-slate-300" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Today's Sales</span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 ring-1 ring-emerald-500/20 flex items-center justify-center">
+              <DollarSign className="w-4 h-4" />
+            </div>
           </div>
           <div className="flex items-end gap-2">
-            <span className="text-2xl font-black">{formatCurrency(todaySales)}</span>
-            <span className={`text-[10px] flex items-center px-1 py-0.5 font-bold mb-1 border ${todaySalesChange >= 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
+            <span className="text-2xl font-black tracking-tight text-emerald-600 tabular-nums">{formatCurrency(todaySales)}</span>
+            <span className={`text-[10px] flex items-center px-1.5 py-0.5 rounded font-bold mb-1 border ${todaySalesChange >= 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
               {todaySalesChange >= 0 ? <TrendingUp className="w-3 h-3 mr-0.5" /> : <TrendingDown className="w-3 h-3 mr-0.5" />}
               {Math.abs(todaySalesChange).toFixed(1)}%
             </span>
@@ -193,14 +195,16 @@ export default function AnalyticsView({ profile, drugs, purchases, dispenses }: 
         </div>
 
         {/* Monthly Sales */}
-        <div className="bg-white p-4 border border-slate-200 shadow-sm flex flex-col justify-between">
+        <div className="bg-white p-4.5 rounded-xl border border-slate-200 border-t-4 border-t-teal-500 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Monthly Sales</span>
-            <LineChartIcon className="w-4 h-4 text-slate-300" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Monthly Sales</span>
+            <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-600 ring-1 ring-teal-500/20 flex items-center justify-center">
+              <LineChartIcon className="w-4 h-4" />
+            </div>
           </div>
           <div className="flex items-end gap-2">
-            <span className="text-2xl font-black">{formatCurrency(monthlySales)}</span>
-            <span className={`text-[10px] flex items-center px-1 py-0.5 font-bold mb-1 border ${monthlySalesChange >= 0 ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
+            <span className="text-2xl font-black tracking-tight text-teal-600 tabular-nums">{formatCurrency(monthlySales)}</span>
+            <span className={`text-[10px] flex items-center px-1.5 py-0.5 rounded font-bold mb-1 border ${monthlySalesChange >= 0 ? 'bg-teal-50 text-teal-700 border-teal-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
               {monthlySalesChange >= 0 ? <TrendingUp className="w-3 h-3 mr-0.5" /> : <TrendingDown className="w-3 h-3 mr-0.5" />}
               {Math.abs(monthlySalesChange).toFixed(1)}%
             </span>
@@ -209,14 +213,16 @@ export default function AnalyticsView({ profile, drugs, purchases, dispenses }: 
         </div>
 
         {/* Gross Profit */}
-        <div className="bg-white p-4 border border-slate-200 shadow-sm flex flex-col justify-between">
+        <div className="bg-white p-4.5 rounded-xl border border-slate-200 border-t-4 border-t-indigo-500 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Gross Profit</span>
-            <Copy className="w-4 h-4 text-slate-300" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Gross Profit</span>
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 ring-1 ring-indigo-500/20 flex items-center justify-center">
+              <Copy className="w-4 h-4" />
+            </div>
           </div>
           <div className="flex items-end gap-2">
-            <span className="text-2xl font-black">{formatCurrency(grossProfitVal)}</span>
-            <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-1 py-0.5 mb-1 border border-slate-200 uppercase">
+            <span className="text-2xl font-black tracking-tight text-indigo-600 tabular-nums">{formatCurrency(grossProfitVal)}</span>
+            <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-1.5 py-0.5 mb-1 rounded border border-indigo-200 uppercase">
               {grossProfitMargin.toFixed(1)}% Margin
             </span>
           </div>
@@ -224,13 +230,15 @@ export default function AnalyticsView({ profile, drugs, purchases, dispenses }: 
         </div>
 
         {/* Inventory Value */}
-        <div className="bg-white p-4 border border-slate-200 shadow-sm flex flex-col justify-between">
+        <div className="bg-white p-4.5 rounded-xl border border-slate-200 border-t-4 border-t-sky-500 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Inventory Value</span>
-            <Package className="w-4 h-4 text-slate-300" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Inventory Value</span>
+            <div className="w-8 h-8 rounded-lg bg-sky-50 text-sky-600 ring-1 ring-sky-500/20 flex items-center justify-center">
+              <Package className="w-4 h-4" />
+            </div>
           </div>
           <div className="flex items-end gap-2">
-            <span className="text-2xl font-black">{formatCurrency(inventoryValue)}</span>
+            <span className="text-2xl font-black tracking-tight text-sky-600 tabular-nums">{formatCurrency(inventoryValue)}</span>
           </div>
           <span className="text-[9px] font-bold text-slate-400 uppercase mt-2">CURRENT STOCK VALUATION</span>
         </div>
@@ -253,10 +261,15 @@ export default function AnalyticsView({ profile, drugs, purchases, dispenses }: 
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {topItems.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-600">{item.name}</td>
-                    <td className="px-4 py-3 text-right text-slate-500">{item.count.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right font-bold text-slate-700">{formatCurrency(item.revenue)}</td>
+                  <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 font-semibold text-slate-800 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold flex items-center justify-center">
+                        {idx + 1}
+                      </span>
+                      {item.name}
+                    </td>
+                    <td className="px-4 py-3 text-right font-bold text-indigo-600 tabular-nums">{item.count.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-black text-emerald-600 tabular-nums">{formatCurrency(item.revenue)}</td>
                   </tr>
                 ))}
                 {topItems.length === 0 && (
@@ -268,13 +281,13 @@ export default function AnalyticsView({ profile, drugs, purchases, dispenses }: 
         </div>
 
         {/* Top 5 Categories */}
-        <div className="lg:col-span-2 bg-white border border-slate-200 shadow-sm flex flex-col">
-          <div className="p-4 border-b border-slate-200">
-            <h2 className="font-bold font-serif italic text-lg text-slate-800">Top 5 Categories</h2>
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col overflow-hidden">
+          <div className="p-4 border-b border-slate-200 bg-slate-50/50">
+            <h2 className="font-bold text-sm uppercase tracking-wider text-slate-800">Top 5 Categories</h2>
           </div>
           <div className="p-0 overflow-auto max-h-[300px]">
             <table className="w-full text-xs text-left">
-              <thead className="text-[9px] text-slate-500 font-bold uppercase border-b border-slate-200 sticky top-0 bg-white">
+              <thead className="text-[10px] text-slate-500 font-bold uppercase border-b border-slate-200 sticky top-0 bg-white">
                 <tr>
                   <th className="px-4 py-3">Category</th>
                   <th className="px-4 py-3 text-right">Sales Count</th>
@@ -283,13 +296,13 @@ export default function AnalyticsView({ profile, drugs, purchases, dispenses }: 
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {topCategories.map((cat, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium flex items-center">
-                      <div className="w-1.5 h-1.5 bg-emerald-500 mr-2 rounded-full"></div>
-                      <span className="text-slate-600">{cat.name}</span>
+                  <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 font-semibold flex items-center">
+                      <div className="w-2 h-2 bg-emerald-500 mr-2 rounded-full"></div>
+                      <span className="text-slate-800">{cat.name}</span>
                     </td>
-                    <td className="px-4 py-3 text-right text-slate-500">{cat.count.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right font-bold text-slate-700">{formatCurrency(cat.revenue)}</td>
+                    <td className="px-4 py-3 text-right font-bold text-indigo-600 tabular-nums">{cat.count.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-black text-emerald-600 tabular-nums">{formatCurrency(cat.revenue)}</td>
                   </tr>
                 ))}
                 {topCategories.length === 0 && (

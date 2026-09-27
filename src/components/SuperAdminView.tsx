@@ -350,35 +350,47 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+        <div className="bg-white border border-slate-200 border-t-4 border-t-emerald-500 rounded-xl p-5 shadow-xs hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-slate-500">Platform Revenue</h3>
-            <TrendingUp className="w-5 h-5 text-emerald-500" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-800">Platform Revenue</h3>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 ring-1 ring-emerald-500/20 flex items-center justify-center">
+              <TrendingUp className="w-4 h-4" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-slate-800">
+          <p className="text-2xl font-black text-emerald-600 tabular-nums">
             ₦{globalMetrics.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </p>
+          <p className="text-[10px] text-slate-400 mt-1">Aggregated tenant volume</p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+        <div className="bg-white border border-slate-200 border-t-4 border-t-indigo-500 rounded-xl p-5 shadow-xs hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-slate-500">Total Pharmacies</h3>
-            <Building2 className="w-5 h-5 text-indigo-500" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-800">Total Pharmacies</h3>
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 ring-1 ring-indigo-500/20 flex items-center justify-center">
+              <Building2 className="w-4 h-4" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-slate-800">{globalMetrics.totalPharmacies}</p>
+          <p className="text-2xl font-black text-indigo-600 tabular-nums">{globalMetrics.totalPharmacies}</p>
+          <p className="text-[10px] text-slate-400 mt-1">Registered pharmacy tenants</p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+        <div className="bg-white border border-slate-200 border-t-4 border-t-blue-500 rounded-xl p-5 shadow-xs hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-slate-500">Total Users</h3>
-            <Users className="w-5 h-5 text-blue-500" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-blue-800">Total Users</h3>
+            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 ring-1 ring-blue-500/20 flex items-center justify-center">
+              <Users className="w-4 h-4" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-slate-800">{globalMetrics.totalUsers}</p>
+          <p className="text-2xl font-black text-blue-600 tabular-nums">{globalMetrics.totalUsers}</p>
+          <p className="text-[10px] text-slate-400 mt-1">Active staff & practitioners</p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+        <div className="bg-white border border-slate-200 border-t-4 border-t-purple-500 rounded-xl p-5 shadow-xs hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-slate-500">Prescriptions</h3>
-            <Activity className="w-5 h-5 text-rose-500" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-purple-800">Prescriptions</h3>
+            <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 ring-1 ring-purple-500/20 flex items-center justify-center">
+              <Activity className="w-4 h-4" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-slate-800">{globalMetrics.totalPrescriptions}</p>
+          <p className="text-2xl font-black text-purple-600 tabular-nums">{globalMetrics.totalPrescriptions}</p>
+          <p className="text-[10px] text-slate-400 mt-1">Dispensed clinical orders</p>
         </div>
       </div>
 

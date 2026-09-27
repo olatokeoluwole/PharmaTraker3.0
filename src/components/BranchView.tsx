@@ -310,32 +310,35 @@ export default function BranchView({ profile, readOnly = false }: { profile: Use
 
       {/* Branch Sales & Status Banner */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div className="bg-white p-4.5 rounded-xl border border-slate-200 border-t-4 border-t-amber-500 shadow-xs hover:shadow-md transition-shadow flex items-center justify-between">
           <div>
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pending Prescriptions</div>
-            <div className="text-2xl font-black text-amber-600">{pending.length}</div>
+            <div className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Pending Prescriptions</div>
+            <div className="text-2xl font-black text-amber-600 mt-1 tabular-nums">{pending.length}</div>
+            <div className="text-[10px] text-slate-400 font-medium mt-0.5">Awaiting fulfillment</div>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 ring-1 ring-amber-500/20 flex items-center justify-center font-bold">
             <Clock className="w-5 h-5" />
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div className="bg-white p-4.5 rounded-xl border border-slate-200 border-t-4 border-t-teal-500 shadow-xs hover:shadow-md transition-shadow flex items-center justify-between">
           <div>
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fulfilled Orders</div>
-            <div className="text-2xl font-black text-emerald-600">{dispensed.length}</div>
+            <div className="text-[11px] font-bold text-teal-800 uppercase tracking-wider">Fulfilled Orders</div>
+            <div className="text-2xl font-black text-teal-600 mt-1 tabular-nums">{dispensed.length}</div>
+            <div className="text-[10px] text-slate-400 font-medium mt-0.5">Dispensed successfully</div>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+          <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 ring-1 ring-teal-500/20 flex items-center justify-center font-bold">
             <Check className="w-5 h-5" />
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div className="bg-white p-4.5 rounded-xl border border-slate-200 border-t-4 border-t-emerald-500 shadow-xs hover:shadow-md transition-shadow flex items-center justify-between">
           <div>
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Today's Sales Income</div>
-            <div className="text-2xl font-black text-indigo-700">₦{todayIncome.toLocaleString()}</div>
+            <div className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Today's Sales Income</div>
+            <div className="text-2xl font-black text-emerald-600 mt-1 tabular-nums">₦{todayIncome.toLocaleString()}</div>
+            <div className="text-[10px] text-emerald-600 font-medium mt-0.5">Daily cash & direct sales</div>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-500/20 flex items-center justify-center font-bold">
             <TrendingUp className="w-5 h-5" />
           </div>
         </div>

@@ -151,17 +151,19 @@ export default function DoctorView({ profile, readOnly = false }: { profile: Use
                     <td className="py-2 font-medium text-slate-800">
                       {drug.name} <span className="text-slate-400 font-normal">({drug.unit || 'units'})</span>
                     </td>
-                    <td className="py-2 text-right font-semibold text-slate-700">
+                    <td className="py-2 text-right font-black text-emerald-600 tabular-nums">
                       {drug.sellingPrice ? `₦${drug.sellingPrice.toLocaleString()}` : '-'}
                     </td>
-                    <td className="py-2 text-right font-bold">
+                    <td className="py-2 text-right font-bold tabular-nums">
                       {(() => {
                         const totalStock = getBranchStock(drug);
-                        return (
-                          <span className={totalStock > 0 ? 'text-emerald-600' : 'text-red-600'}>
-                            {totalStock > 0 ? `${totalStock} in stock` : 'Out of Stock'}
-                          </span>
-                        );
+                        if (totalStock <= 0) {
+                          return <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded text-[10px] border border-rose-200">Out of Stock</span>;
+                        }
+                        if (totalStock <= 5) {
+                          return <span className="text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded text-[10px] border border-amber-200">{totalStock} low</span>;
+                        }
+                        return <span className="text-sky-700 font-bold">{totalStock} in stock</span>;
                       })()}
                     </td>
                   </tr>
