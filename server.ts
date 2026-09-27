@@ -1,7 +1,6 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -12,81 +11,9 @@ async function startServer() {
 
   app.use(express.json());
 
-  // Set up Nodemailer transporter
-  // The user should configure SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS
-  // For testing without creds, we'll just log
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp.gmail.com",
-    port: Number(process.env.SMTP_PORT) || 587,
-    secure: false, // true for 465, false for other ports
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-
-  // API Route to send notification
-  app.post("/api/notify-low-stock", async (req, res) => {
-    const { drugName, quantity } = req.body;
-
-    if (!drugName || quantity === undefined) {
-      return res.status(400).json({ error: "Missing drugName or quantity" });
-    }
-
-    try {
-      if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-        console.log(`[Email Stub] Low stock alert: ${drugName} dropped to ${quantity}.`);
-        console.log(`[Email Stub] Please configure SMTP settings in .env to actually send emails.`);
-        return res.json({ success: true, stub: true });
-      }
-
-      await transporter.sendMail({
-        from: `"MedTrack Pro" <${process.env.SMTP_USER}>`,
-        to: "olatokeoluwole@gmail.com",
-        subject: `⚠️ Low Stock Alert: ${drugName}`,
-        text: `The inventory for ${drugName} has dropped to ${quantity}. Please restock soon.`,
-        html: `<h2>Low Stock Alert</h2><p>The inventory for <strong>${drugName}</strong> has dropped to <strong>${quantity}</strong>.</p><p>Please restock soon.</p>`,
-      });
-
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error("Failed to send email:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // API Route to send invitation email
-  app.post("/api/send-invitation", async (req, res) => {
-    const { email, organizationName, appUrl } = req.body;
-    if (!email || !organizationName) return res.status(400).json({ error: "Missing email or organizationName" });
-
-    try {
-      const loginUrl = appUrl || process.env.VITE_APP_URL || req.headers.origin || "https://pharma-tracker.com";
-
-      if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-        console.log(`[Email Stub] Invitation sent to ${email} for ${organizationName}. Please configure SMTP in .env to actually send.`);
-        return res.json({ success: true, stub: true, link: loginUrl });
-      }
-
-      await transporter.sendMail({
-        from: `"MedTrack Pro" <${process.env.SMTP_USER}>`,
-        to: "olatokeoluwole@gmail.com",
-        subject: `[Admin Alert] Forward Invitation: ${organizationName}`,
-        text: `New Organization Registered: ${organizationName}\nIntended Admin: ${email}\n\nPlease forward the following login link to them:\n${loginUrl}`,
-        html: `
-          <h2>New Organization Registered</h2>
-          <p>You have successfully registered <strong>${organizationName}</strong>.</p>
-          <p><strong>Intended Admin Email:</strong> ${email}</p>
-          <hr />
-          <p><strong>Action Required:</strong> Please forward the link below to the admin so they can log in to their new pharmacy workspace.</p>
-          <p><strong>Login Link:</strong> <a href="${loginUrl}">${loginUrl}</a></p>
-        `,
-      });
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error("Failed to send invitation email:", error);
-      res.status(500).json({ error: error.message });
-    }
+  // Health check endpoint
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok" });
   });
 
   // Vite middleware for development

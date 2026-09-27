@@ -363,17 +363,6 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
         await updateDoc(drugRef, {
           'branchStock.central': newQty
         });
-        
-        if (newQty <= 3 && newQty < currentQty) {
-          fetch('/api/notify-low-stock', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              drugName: drug.name,
-              quantity: newQty
-            })
-          }).catch(e => console.error("Failed to notify low stock", e));
-        }
       }
       
       setDisposalDrug('');
@@ -418,17 +407,6 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
         await updateDoc(drugRef, {
           'branchStock.central': newQty
         });
-
-        if (newQty <= 3 && newQty < currentQty) {
-          fetch('/api/notify-low-stock', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              drugName: drug.name,
-              quantity: newQty
-            })
-          }).catch(e => console.error("Failed to notify low stock", e));
-        }
       } else {
         await updateDoc(drugRef, {
           'branchStock.central': increment(-auditMissingQty)

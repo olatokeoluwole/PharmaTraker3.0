@@ -121,18 +121,6 @@ export default function BranchView({ profile, readOnly = false }: { profile: Use
         await updateDoc(drugRef, {
           ['branchStock.' + locId]: newQty
         });
-
-        // Trigger notification if low stock
-        if (newQty <= 3 && newQty < currentQty) {
-          fetch('/api/notify-low-stock', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              drugName: prescription.drugName,
-              quantity: newQty
-            })
-          }).catch(err => console.error("Failed to notify low stock", err));
-        }
       }
 
       setSelectedPrescriptionForDispense(null);

@@ -73,15 +73,6 @@ export default function StoreView({ profile, readOnly = false }: { profile: User
       const newStoreQty = storeQty - transferQuantity;
       await updateDoc(drugRef, payload);
 
-      // Trigger email notification if stock is 3 or below and decreasing
-      if (newStoreQty <= 3 && storeQty > 3) {
-        fetch('/api/notify-low-stock', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ drugName: drug.name, quantity: newStoreQty })
-        }).catch(err => console.error("Failed to trigger low stock notification", err));
-      }
-      
       setSelectedDrug('');
       setTransferQuantity(0);
     } catch (err) {

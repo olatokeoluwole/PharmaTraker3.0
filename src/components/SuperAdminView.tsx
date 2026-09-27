@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { UserProfile, Organization, DispenseRecord } from '../types';
-import { db, collection, onSnapshot, addDoc, setDoc, doc, query, where } from '../db';
-import { Building2, Users, Plus, Shield, TrendingUp, Activity, X, Download } from 'lucide-react';
+import { db, collection, onSnapshot, addDoc, setDoc, doc, query, where, deleteDoc } from '../db';
+import { supabase } from '../supabase';
+import { Building2, Users, Plus, Shield, TrendingUp, Activity, X, Download, Trash2, AlertTriangle, Loader2, CheckCircle2 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -20,6 +21,12 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
 
   const [selectedOrgForView, setSelectedOrgForView] = useState<Organization | null>(null);
   const [orgInventory, setOrgInventory] = useState<any[]>([]);
+
+  // Pharmacy deletion states
+  const [orgToDelete, setOrgToDelete] = useState<Organization | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedOrgForView) return;
@@ -112,33 +119,78 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
         name: 'Pharmacy Admin',
       }, { merge: true });
 
-      // 3. Send email via backend API
-      let inviteMessage = `Organization "${newOrgName}" created successfully! Admin invite sent to ${cleanEmail}.`;
-      try {
-        const res = await fetch('/api/send-invitation', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: cleanEmail,
-            organizationName: newOrgName,
-            appUrl: window.location.origin
-          })
-        });
-        const data = await res.json();
-        
-        if (data.stub) {
-          inviteMessage = `Organization "${newOrgName}" created successfully!\n\nNOTE: You have not configured SMTP email settings in your Environment Variables yet, so the email was NOT sent.\n\nPlease copy this login link and send it to the admin manually:\n\n${data.link}`;
-        }
-      } catch (emailErr) {
-        console.error("Failed to send invite email", emailErr);
-      }
-
       setNewOrgName('');
       setAdminEmail('');
       setShowOrgModal(false);
-      alert(inviteMessage);
+      setToastMessage(`Organization "${newOrgName}" onboarded! Admin assigned to ${cleanEmail}.`);
+      setTimeout(() => setToastMessage(null), 5000);
+      alert(`Organization "${newOrgName}" created successfully!\n\nAdmin Email: ${cleanEmail}\n\nYou can now copy and share the permanent client portal link (${window.location.origin}) with them directly.`);
     } catch (err: any) {
       alert("Error creating organization: " + err.message);
+    }
+  };
+
+  const handleDeleteOrganization = async (org: Organization) => {
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      // 1. Delete associated staff roles & unassign users in Supabase
+      try {
+        await supabase.from('staff_roles').delete().eq('organization_id', org.id);
+      } catch (e) {
+        console.warn('Could not delete staff_roles:', e);
+      }
+
+      try {
+        await supabase.from('users').update({ organization_id: null, role: 'pending' }).eq('organization_id', org.id);
+      } catch (e) {
+        console.warn('Could not unassign users:', e);
+      }
+
+      // 2. Clean up associated tables for this tenant
+      const tablesToClean = [
+        'drugs',
+        'branches',
+        'dispense_records',
+        'prescriptions',
+        'purchases',
+        'operating_expenses',
+        'audits',
+        'disposals',
+        'inter_branch_transfers'
+      ];
+
+      for (const tbl of tablesToClean) {
+        try {
+          await supabase.from(tbl).delete().eq('organization_id', org.id);
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      // 3. Delete organization itself
+      await deleteDoc(doc(db, 'organizations', org.id));
+
+      try {
+        await supabase.from('organizations').delete().eq('id', org.id);
+      } catch (e) {
+        // ignore
+      }
+
+      // 4. Update local state
+      setOrganizations(prev => prev.filter(o => o.id !== org.id));
+      if (selectedOrgForView?.id === org.id) {
+        setSelectedOrgForView(null);
+      }
+
+      setOrgToDelete(null);
+      setToastMessage(`Pharmacy "${org.name}" was successfully removed.`);
+      setTimeout(() => setToastMessage(null), 5000);
+    } catch (err: any) {
+      console.error('Error deleting organization:', err);
+      setDeleteError(err.message || 'Failed to delete organization. Please try again.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -238,6 +290,22 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl flex items-center justify-between shadow-sm animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span className="text-sm font-medium">{toastMessage}</span>
+          </div>
+          <button 
+            onClick={() => setToastMessage(null)}
+            className="text-emerald-600 hover:text-emerald-800 text-sm font-bold ml-4"
+          >
+            &times;
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
@@ -367,12 +435,25 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
                         {new Date(org.createdAt).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() => setSelectedOrgForView(org)}
-                          className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors border border-indigo-200 shadow-sm"
-                        >
-                          God Mode Viewer
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => setSelectedOrgForView(org)}
+                            className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors border border-indigo-200 shadow-sm flex items-center gap-1.5"
+                          >
+                            God Mode Viewer
+                          </button>
+                          <button
+                            onClick={() => {
+                              setDeleteError(null);
+                              setOrgToDelete(org);
+                            }}
+                            className="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg transition-colors border border-rose-200 shadow-sm flex items-center gap-1.5"
+                            title={`Delete ${org.name}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -442,6 +523,78 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
         </div>
       )}
 
+      {/* Delete Pharmacy Confirmation Modal */}
+      {orgToDelete && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden border border-slate-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-rose-50/70">
+              <h3 className="font-bold text-rose-900 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-rose-600" />
+                Remove Pharmacy Organization
+              </h3>
+              <button 
+                onClick={() => !isDeleting && setOrgToDelete(null)} 
+                disabled={isDeleting}
+                className="text-slate-400 hover:text-slate-600 text-xl leading-none disabled:opacity-50"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-700 leading-relaxed">
+                Are you sure you want to remove <strong className="text-slate-900 font-semibold">{orgToDelete.name}</strong> from MedTrack Pro?
+              </p>
+
+              <div className="bg-rose-50 border border-rose-100 rounded-lg p-3.5 text-xs text-rose-800 space-y-1.5">
+                <p className="font-semibold flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  Irreversible Action
+                </p>
+                <p className="leading-relaxed">
+                  This will permanently delete this pharmacy tenant, revoke access for its assigned staff, and detach all records. Users from this business will no longer be able to access the system.
+                </p>
+              </div>
+
+              {deleteError && (
+                <div className="p-3 bg-red-100 border border-red-200 text-red-700 text-xs rounded-lg">
+                  {deleteError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 mt-6">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setOrgToDelete(null)}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => handleDeleteOrganization(orgToDelete)}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-semibold shadow-sm transition-colors flex items-center gap-2 disabled:opacity-60"
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      Yes, Delete Pharmacy
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {selectedOrgForView && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-end z-50">
           <div className="bg-white h-full w-full max-w-2xl shadow-xl flex flex-col animate-in slide-in-from-right">
@@ -450,17 +603,28 @@ export default function SuperAdminView({ profile }: SuperAdminViewProps) {
                 <h2 className="text-xl font-bold text-slate-800">{selectedOrgForView.name}</h2>
                 <p className="text-sm text-slate-500">Super Admin Data Viewer (Read-Only)</p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={handleDownloadReport}
-                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors shadow-sm"
                 >
                   <Download className="w-4 h-4" />
                   Download Monthly Report (PDF)
                 </button>
+                <button
+                  onClick={() => {
+                    setDeleteError(null);
+                    setOrgToDelete(selectedOrgForView);
+                  }}
+                  className="flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors shadow-sm"
+                  title="Remove this pharmacy"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete
+                </button>
                 <button 
                   onClick={() => setSelectedOrgForView(null)}
-                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors"
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors ml-1"
                 >
                   <X className="w-5 h-5" />
                 </button>
