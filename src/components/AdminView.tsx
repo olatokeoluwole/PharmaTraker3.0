@@ -277,6 +277,21 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
     }
   };
 
+  const handleDeleteDrug = async (drug: Drug) => {
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete "${drug.name}"?\n\nThis will permanently remove the item from inventory registration and catalog listings.`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      await deleteDoc(doc(db, 'drugs', drug.id));
+      alert(`"${drug.name}" was successfully deleted.`);
+    } catch (err: any) {
+      console.error('Error deleting drug:', err);
+      alert('Failed to delete item: ' + (err?.message || 'Check connection or permissions'));
+    }
+  };
+
   const handleAddPurchase = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDrug || !purchaseQuantity || Number(purchaseQuantity) <= 0) return;
@@ -1480,7 +1495,7 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
                       <th className="px-4 py-3 text-right">Disp Qty</th>
                       <th className="px-4 py-3 text-right">System Total</th>
                       <th className="px-4 py-3 text-right">Unaccounted</th>
-                      <th className="px-4 py-3 text-center">Pricing</th>
+                      <th className="px-4 py-3 text-center">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
@@ -1578,13 +1593,22 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
                                 </button>
                               </div>
                             ) : (
-                              <button
-                                onClick={() => handleStartEditDrugPrice(drug)}
-                                className="p-1 text-slate-400 hover:text-indigo-600 rounded transition-colors"
-                                title="Edit Prices"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  onClick={() => handleStartEditDrugPrice(drug)}
+                                  className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                                  title="Edit Prices"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteDrug(drug)}
+                                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
+                                  title="Delete Item"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             )}
                           </td>
                         </tr>
