@@ -289,8 +289,8 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
       const totalCost = unitCost * qty;
 
       const purchasePayload: any = {
-        adminId: profile.id,
-        adminName: profile.name,
+        adminId: profile?.id || 'admin',
+        adminName: profile?.name || profile?.email || 'Admin',
         drugId: drug.id,
         drugName: drug.name,
         quantityPurchased: qty,
@@ -318,6 +318,9 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
       if (typeof purchaseUnitCostPrice === 'number' && purchaseUnitCostPrice > 0) {
         updates.costPrice = purchaseUnitCostPrice;
       }
+      if (purchaseExpiryDate) {
+        updates.expiryDate = purchaseExpiryDate;
+      }
       await updateDoc(drugRef, updates);
       
       setSelectedDrug('');
@@ -327,9 +330,9 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
       setPurchaseInvoiceNumber('');
       setPurchaseExpiryDate('');
       alert('Stock purchase intake & cost recorded successfully!');
-    } catch (err) {
-      console.error(err);
-      alert('Error adding purchase');
+    } catch (err: any) {
+      console.error('Error adding purchase:', err);
+      alert('Error adding purchase: ' + (err?.message || 'Check database connection'));
     }
   };
 
@@ -370,9 +373,9 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
       setDisposalNotes('');
       setDisposalReason('expired');
       alert('Drug disposal recorded successfully');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Error recording disposal');
+      alert('Error recording disposal: ' + (err?.message || 'Check connection'));
     }
   };
 
@@ -385,7 +388,8 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
       if (!drug || !user) return;
 
       await addDoc(collection(db, 'audits'), {
-        adminId: profile.id,
+        adminId: profile?.id || 'admin',
+        adminName: profile?.name || profile?.email || 'Admin',
         drugId: drug.id,
         drugName: drug.name,
         expectedQuantity: 0,
@@ -418,9 +422,9 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
       setAuditUserId('');
       setAuditNotes('');
       alert('Missing inventory report filed.');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Error adding audit report');
+      alert('Error adding audit report: ' + (err?.message || 'Check connection'));
     }
   };
 

@@ -6,7 +6,7 @@ export function setTenantId(id: string | null) {
 }
 
 const toSnake = (str: string) => str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-const toCamel = (str: string) => str.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+const toCamel = (str: string) => str.replace(/_([a-z])/g, (_, g) => g.toUpperCase());
 
 const convertKeys = (obj: any, converter: (s: string) => string): any => {
   if (typeof obj !== 'object' || obj === null) return obj;
@@ -18,7 +18,7 @@ const convertKeys = (obj: any, converter: (s: string) => string): any => {
   return result;
 };
 
-function toSupabasePayload(data: any) {
+function toSupabasePayload(data: any, table?: string) {
   const snaked = convertKeys(data, toSnake);
   if (snaked.created_at && typeof snaked.created_at === 'number') {
     snaked.created_at = new Date(snaked.created_at).toISOString();
@@ -26,10 +26,79 @@ function toSupabasePayload(data: any) {
   if (snaked.updated_at && typeof snaked.updated_at === 'number') {
     snaked.updated_at = new Date(snaked.updated_at).toISOString();
   }
+
+  // Schema-specific column alignments for Supabase tables
+  if (table === 'purchases') {
+    if (snaked.quantity === undefined && snaked.quantity_purchased !== undefined) {
+      snaked.quantity = snaked.quantity_purchased;
+    }
+    delete snaked.quantity_purchased;
+
+    if (snaked.total_cost_price === undefined) {
+      if (snaked.total_cost !== undefined) {
+        snaked.total_cost_price = snaked.total_cost;
+      } else if (snaked.unit_cost_price !== undefined && snaked.quantity !== undefined) {
+        snaked.total_cost_price = snaked.unit_cost_price * snaked.quantity;
+      }
+    }
+    delete snaked.total_cost;
+
+    if (snaked.created_by === undefined && snaked.admin_id !== undefined) {
+      snaked.created_by = snaked.admin_id;
+    }
+    delete snaked.admin_id;
+
+    if (snaked.created_by_name === undefined && snaked.admin_name !== undefined) {
+      snaked.created_by_name = snaked.admin_name;
+    }
+    delete snaked.admin_name;
+  } else if (table === 'disposals') {
+    if (snaked.quantity === undefined && snaked.quantity_disposed !== undefined) {
+      snaked.quantity = snaked.quantity_disposed;
+    }
+    delete snaked.quantity_disposed;
+
+    if (snaked.reported_by === undefined && snaked.admin_id !== undefined) {
+      snaked.reported_by = snaked.admin_id;
+    }
+    delete snaked.admin_id;
+
+    if (snaked.reported_by_name === undefined && snaked.admin_name !== undefined) {
+      snaked.reported_by_name = snaked.admin_name;
+    }
+    delete snaked.admin_name;
+  } else if (table === 'audits') {
+    if (snaked.missing_quantity === undefined) {
+      snaked.missing_quantity = snaked.discrepancy ?? snaked.audit_missing_qty ?? 0;
+    }
+    delete snaked.discrepancy;
+    delete snaked.audit_missing_qty;
+
+    if (snaked.reported_by === undefined && snaked.admin_id !== undefined) {
+      snaked.reported_by = snaked.admin_id;
+    }
+    delete snaked.admin_id;
+
+    if (snaked.reported_by_name === undefined && snaked.admin_name !== undefined) {
+      snaked.reported_by_name = snaked.admin_name;
+    }
+    delete snaked.admin_name;
+
+    delete snaked.expected_quantity;
+    delete snaked.actual_quantity;
+    delete snaked.responsible_user_name;
+  } else if (table === 'drugs') {
+    if (snaked.branch_stock && typeof snaked.branch_stock === 'object') {
+      if (snaked.central_stock === undefined && snaked.branch_stock.central !== undefined) {
+        snaked.central_stock = snaked.branch_stock.central;
+      }
+    }
+  }
+
   return snaked;
 }
 
-function fromSupabaseData(data: any) {
+function fromSupabaseData(data: any, table?: string) {
   const cameled = convertKeys(data, toCamel);
   if (cameled.createdAt && typeof cameled.createdAt === 'string') {
     cameled.createdAt = new Date(cameled.createdAt).getTime();
@@ -37,6 +106,35 @@ function fromSupabaseData(data: any) {
   if (cameled.updatedAt && typeof cameled.updatedAt === 'string') {
     cameled.updatedAt = new Date(cameled.updatedAt).getTime();
   }
+
+  // Cross-populate alias fields for application components
+  if (table === 'purchases' || cameled.unitCostPrice !== undefined || data.total_cost_price !== undefined || data.quantity !== undefined) {
+    const qty = cameled.quantityPurchased ?? cameled.quantity ?? 0;
+    cameled.quantityPurchased = qty;
+    cameled.quantity = qty;
+
+    const unitPrice = cameled.unitCostPrice ?? 0;
+    const total = cameled.totalCost ?? cameled.totalCostPrice ?? (unitPrice * qty);
+    cameled.totalCost = total;
+    cameled.totalCostPrice = total;
+
+    const creatorId = cameled.adminId ?? cameled.createdBy ?? '';
+    cameled.adminId = creatorId;
+    cameled.createdBy = creatorId;
+
+    const creatorName = cameled.adminName ?? cameled.createdByName ?? '';
+    cameled.adminName = creatorName;
+    cameled.createdByName = creatorName;
+  } else if (table === 'disposals') {
+    cameled.quantityDisposed = cameled.quantityDisposed ?? cameled.quantity ?? 0;
+    cameled.adminId = cameled.adminId ?? cameled.reportedBy ?? '';
+    cameled.adminName = cameled.adminName ?? cameled.reportedByName ?? '';
+  } else if (table === 'audits') {
+    cameled.discrepancy = cameled.discrepancy ?? cameled.missingQuantity ?? 0;
+    cameled.adminId = cameled.adminId ?? cameled.reportedBy ?? '';
+    cameled.adminName = cameled.adminName ?? cameled.reportedByName ?? '';
+  }
+
   return cameled;
 }
 
@@ -80,7 +178,7 @@ function getPrimaryKey(table: string) {
 
 export async function addDoc(colRef: any, data: any) {
   const table = colRef.path;
-  const payload = toSupabasePayload(data);
+  const payload = toSupabasePayload(data, table);
   if (currentTenantId && table !== 'organizations' && !payload.organization_id) {
     payload.organization_id = currentTenantId;
   }
@@ -91,33 +189,76 @@ export async function addDoc(colRef: any, data: any) {
 }
 
 export async function setDoc(docRef: any, data: any, options?: { merge?: boolean }) {
-  const payload = toSupabasePayload(data);
-  const pk = getPrimaryKey(docRef.table);
+  const table = docRef.table;
+  const payload = toSupabasePayload(data, table);
+  const pk = getPrimaryKey(table);
   payload[pk] = docRef.id;
-  if (currentTenantId && docRef.table !== 'organizations' && !payload.organization_id) {
+  if (currentTenantId && table !== 'organizations' && !payload.organization_id) {
     payload.organization_id = currentTenantId;
   }
-  const { error } = await supabase.from(docRef.table).upsert(payload);
+  const { error } = await supabase.from(table).upsert(payload);
   if (error) { console.error("setDoc error", error); throw error; }
 }
 
 export async function updateDoc(docRef: any, data: any) {
-  const payload = toSupabasePayload(data);
-  const pk = getPrimaryKey(docRef.table);
+  const table = docRef.table;
+  const pk = getPrimaryKey(table);
+  const payload = toSupabasePayload(data, table);
   delete payload[pk];
+
+  const dotKeys = Object.keys(data).filter(k => k.includes('.'));
   let hasIncrement = false;
+  for (const k of Object.keys(data)) {
+    if (data[k]?._type === 'increment') { hasIncrement = true; break; }
+  }
   for (const k of Object.keys(payload)) {
     if (payload[k]?._type === 'increment') { hasIncrement = true; break; }
   }
-  if (hasIncrement) {
-    const { data: existing } = await supabase.from(docRef.table).select('*').eq(pk, docRef.id).single();
+
+  // Handle dot notation updates (e.g. branchStock.central) or increment fields
+  if (dotKeys.length > 0 || hasIncrement) {
+    const { data: existing, error: fetchErr } = await supabase.from(table).select('*').eq(pk, docRef.id).maybeSingle();
+    if (fetchErr) {
+      console.error("updateDoc fetch error", fetchErr);
+      throw fetchErr;
+    }
     if (existing) {
+      if (table === 'drugs' || dotKeys.some(k => k.startsWith('branchStock.') || k.startsWith('branch_stock.'))) {
+        const currentBranchStock = { ...(existing.branch_stock || {}) };
+        for (const k of Object.keys(data)) {
+          if (k.startsWith('branchStock.') || k.startsWith('branch_stock.')) {
+            const sub = k.split('.')[1];
+            const val = data[k];
+            const curVal = Number(currentBranchStock[sub] || 0);
+            const finalVal = (val && typeof val === 'object' && val._type === 'increment')
+              ? (curVal + Number(val.value))
+              : Number(val);
+            currentBranchStock[sub] = finalVal;
+            if (sub === 'central') {
+              payload.central_stock = finalVal;
+            }
+          }
+        }
+        payload.branch_stock = currentBranchStock;
+      }
+
+      // Handle standard non-nested increment keys
       for (const k of Object.keys(payload)) {
-        if (payload[k]?._type === 'increment') payload[k] = (existing[k] || 0) + payload[k].value;
+        if (payload[k]?._type === 'increment') {
+          payload[k] = (Number(existing[k]) || 0) + payload[k].value;
+        }
       }
     }
   }
-  const { error } = await supabase.from(docRef.table).update(payload).eq(pk, docRef.id);
+
+  // Purge any dot keys from payload so Postgres schema cache does not reject them
+  for (const k of Object.keys(payload)) {
+    if (k.includes('.')) {
+      delete payload[k];
+    }
+  }
+
+  const { error } = await supabase.from(table).update(payload).eq(pk, docRef.id);
   if (error) { console.error("updateDoc error", error); throw error; }
 }
 
@@ -128,11 +269,12 @@ export async function deleteDoc(docRef: any) {
 }
 
 export async function getDoc(docRef: any) {
-  const pk = getPrimaryKey(docRef.table);
-  const { data, error } = await supabase.from(docRef.table).select('*').eq(pk, docRef.id).maybeSingle();
+  const table = docRef.table;
+  const pk = getPrimaryKey(table);
+  const { data, error } = await supabase.from(table).select('*').eq(pk, docRef.id).maybeSingle();
   if (error) { console.error("getDoc error", error); throw error; }
   if (!data) return { exists: () => false, data: () => undefined, id: docRef.id };
-  return { exists: () => true, id: docRef.id, data: () => fromSupabaseData(data) };
+  return { exists: () => true, id: docRef.id, data: () => fromSupabaseData(data, table) };
 }
 
 export async function getDocs(queryRef: any) {
@@ -157,7 +299,7 @@ export async function getDocs(queryRef: any) {
   const { data, error } = await sbQuery;
   if (error) { console.error("getDocs error", error); throw error; }
   const pk = getPrimaryKey(table);
-  return { docs: (data || []).map(d => ({ id: d[pk], data: () => fromSupabaseData(d) })) };
+  return { docs: (data || []).map(d => ({ id: d[pk], data: () => fromSupabaseData(d, table) })) };
 }
 
 export function writeBatch(dbRef: any) {
@@ -228,7 +370,7 @@ export function onSnapshot(ref: any, onNext: (snap: any) => void, onError?: (err
 
   sbQuery.then(({ data, error }) => {
     if (error) { if (onError) onError(error); return; }
-    currentData = (data || []).map(d => fromSupabaseData(d));
+    currentData = (data || []).map(d => fromSupabaseData(d, table));
     emit();
   });
 
@@ -241,9 +383,9 @@ export function onSnapshot(ref: any, onNext: (snap: any) => void, onError?: (err
       const pk = getPrimaryKey(table);
       const camelPk = toCamel(pk);
       if (payload.eventType === 'INSERT') {
-        currentData.push(fromSupabaseData(payload.new));
+        currentData.push(fromSupabaseData(payload.new, table));
       } else if (payload.eventType === 'UPDATE') {
-        const updated = fromSupabaseData(payload.new);
+        const updated = fromSupabaseData(payload.new, table);
         currentData = currentData.map(item => item[camelPk] === updated[camelPk] ? updated : item);
       } else if (payload.eventType === 'DELETE') {
         currentData = currentData.filter(item => item[camelPk] !== payload.old[pk]);
