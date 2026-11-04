@@ -311,8 +311,22 @@ export async function updateDoc(docRef: any, data: any) {
 }
 
 export async function deleteDoc(docRef: any) {
-  const pk = getPrimaryKey(docRef.table);
-  const { error } = await supabase.from(docRef.table).delete().eq(pk, docRef.id);
+  const table = docRef.table;
+  const pk = getPrimaryKey(table);
+
+  if (table === 'drugs') {
+    // Delete referencing records across child tables to satisfy foreign key constraints
+    await Promise.allSettled([
+      supabase.from('purchases').delete().eq('drug_id', docRef.id),
+      supabase.from('dispense_records').delete().eq('drug_id', docRef.id),
+      supabase.from('prescriptions').delete().eq('drug_id', docRef.id),
+      supabase.from('disposals').delete().eq('drug_id', docRef.id),
+      supabase.from('audits').delete().eq('drug_id', docRef.id),
+      supabase.from('inter_branch_transfers').delete().eq('drug_id', docRef.id)
+    ]);
+  }
+
+  const { error } = await supabase.from(table).delete().eq(pk, docRef.id);
   if (error) { console.error("deleteDoc error", error); throw error; }
 }
 

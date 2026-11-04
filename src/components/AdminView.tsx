@@ -277,7 +277,7 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
 
   const handleDeleteDrug = async (drug: Drug) => {
     const confirmDelete = window.confirm(
-      `Are you sure you want to delete "${drug.name}"?\n\nThis will permanently remove the item from inventory registration and catalog listings.`
+      `Are you sure you want to delete "${drug.name}"?\n\nThis will permanently remove the item from inventory, along with all associated purchase, transfer, audit, and disposal records.`
     );
     if (!confirmDelete) return;
 
@@ -1499,16 +1499,17 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
                       return matchesSearch && matchesCategory;
                     }).map(drug => {
                       const drugPurchases = purchases.filter(p => p.drugId === drug.id);
-                      const totalPurchased = drugPurchases.reduce((sum, p) => sum + p.quantityPurchased, 0);
-                      const totalDispensed = dispenses.filter(d => d.drugId === drug.id).reduce((sum, d) => sum + d.quantityDispensed, 0);
-                      const totalLost = audits.filter(a => a.drugId === drug.id).reduce((sum, a) => sum + a.discrepancy, 0);
-                      const totalDisposed = disposals.filter(d => d.drugId === drug.id).reduce((sum, d) => sum + d.quantityDisposed, 0);
+                      const totalPurchased = drugPurchases.reduce((sum, p) => sum + (Number(p.quantityPurchased ?? p.quantity) || 0), 0);
+                      const totalDispensed = dispenses.filter(d => d.drugId === drug.id).reduce((sum, d) => sum + (Number((d as any).quantityDispensed ?? (d as any).quantity) || 0), 0);
+                      const totalLost = audits.filter(a => a.drugId === drug.id).reduce((sum, a) => sum + (Number((a as any).discrepancy ?? (a as any).missingQuantity) || 0), 0);
+                      const totalDisposed = disposals.filter(d => d.drugId === drug.id).reduce((sum, d) => sum + (Number((d as any).quantityDisposed ?? (d as any).quantity) || 0), 0);
                       
                       const expectedStock = totalPurchased - totalDispensed - totalLost - totalDisposed;
-                      const storeQty = drug.branchStock?.['central'] || 0;
-                      const dispQty = (Object.values(drug.branchStock || {}) as number[]).reduce<number>((a, b) => a + (b || 0), 0) - storeQty;
+                      const storeQty = Number(drug.branchStock?.['central']) || 0;
+                      const dispQty = (Object.values(drug.branchStock || {}) as number[]).reduce<number>((a, b) => a + (Number(b) || 0), 0) - storeQty;
                       const systemStock = storeQty + dispQty;
-                      const unaccounted = systemStock - expectedStock;
+                      const rawUnaccounted = systemStock - expectedStock;
+                      const unaccounted = isNaN(rawUnaccounted) ? 0 : rawUnaccounted;
 
                       const isEditing = editingDrugId === drug.id;
 
