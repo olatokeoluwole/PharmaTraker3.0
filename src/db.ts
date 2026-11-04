@@ -5,6 +5,17 @@ export function setTenantId(id: string | null) {
   currentTenantId = id;
 }
 
+// Tables that possess an organization_id column in PostgreSQL / Supabase
+const tablesWithOrgId = new Set([
+  'drugs', 'purchases', 'operating_expenses', 'dispense_records',
+  'audits', 'prescriptions', 'branches', 'inter_branch_transfers',
+  'users', 'staff_roles'
+]);
+
+function tableHasOrgId(table: string): boolean {
+  return tablesWithOrgId.has(table);
+}
+
 const toSnake = (str: string) => str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 const toCamel = (str: string) => str.replace(/_([a-z])/g, (_, g) => g.toUpperCase());
 
@@ -67,6 +78,18 @@ function toSupabasePayload(data: any, table?: string) {
       snaked.reported_by_name = snaked.admin_name;
     }
     delete snaked.admin_name;
+
+    delete snaked.organization_id;
+
+    const validDisposalColumns = new Set([
+      'id', 'drug_id', 'drug_name', 'quantity', 'cost_value', 'reason', 'notes',
+      'reported_by', 'reported_by_name', 'created_at'
+    ]);
+    for (const key of Object.keys(snaked)) {
+      if (!validDisposalColumns.has(key)) {
+        delete snaked[key];
+      }
+    }
   } else if (table === 'audits') {
     if (snaked.missing_quantity === undefined) {
       snaked.missing_quantity = snaked.discrepancy ?? snaked.audit_missing_qty ?? 0;
@@ -84,9 +107,15 @@ function toSupabasePayload(data: any, table?: string) {
     }
     delete snaked.admin_name;
 
-    delete snaked.expected_quantity;
-    delete snaked.actual_quantity;
-    delete snaked.responsible_user_name;
+    const validAuditColumns = new Set([
+      'id', 'drug_id', 'drug_name', 'missing_quantity', 'cost_value', 'selling_value',
+      'responsible_user_id', 'reported_by', 'reported_by_name', 'notes', 'created_at', 'organization_id'
+    ]);
+    for (const key of Object.keys(snaked)) {
+      if (!validAuditColumns.has(key)) {
+        delete snaked[key];
+      }
+    }
   } else if (table === 'drugs') {
     if (snaked.branch_stock && typeof snaked.branch_stock === 'object') {
       if (snaked.central_stock === undefined && snaked.branch_stock.central !== undefined) {
@@ -190,7 +219,7 @@ function getPrimaryKey(table: string) {
 export async function addDoc(colRef: any, data: any) {
   const table = colRef.path;
   const payload = toSupabasePayload(data, table);
-  if (currentTenantId && table !== 'organizations' && !payload.organization_id) {
+  if (currentTenantId && tableHasOrgId(table) && !payload.organization_id) {
     payload.organization_id = currentTenantId;
   }
   const { data: res, error } = await supabase.from(table).insert(payload).select().single();
@@ -204,7 +233,7 @@ export async function setDoc(docRef: any, data: any, options?: { merge?: boolean
   const payload = toSupabasePayload(data, table);
   const pk = getPrimaryKey(table);
   payload[pk] = docRef.id;
-  if (currentTenantId && table !== 'organizations' && !payload.organization_id) {
+  if (currentTenantId && tableHasOrgId(table) && !payload.organization_id) {
     payload.organization_id = currentTenantId;
   }
   if (options?.merge) {
@@ -299,7 +328,7 @@ export async function getDoc(docRef: any) {
 export async function getDocs(queryRef: any) {
   const table = queryRef.path;
   let sbQuery = supabase.from(table).select('*');
-  if (currentTenantId && table !== 'organizations') {
+  if (currentTenantId && tableHasOrgId(table)) {
     sbQuery = sbQuery.eq('organization_id', currentTenantId);
   }
   if (queryRef.constraints) {
@@ -372,7 +401,7 @@ export function onSnapshot(ref: any, onNext: (snap: any) => void, onError?: (err
   };
 
   let sbQuery = supabase.from(table).select('*');
-  if (currentTenantId && table !== 'organizations') {
+  if (currentTenantId && tableHasOrgId(table)) {
     sbQuery = sbQuery.eq('organization_id', currentTenantId);
   }
   if (ref.constraints) {
@@ -395,7 +424,7 @@ export function onSnapshot(ref: any, onNext: (snap: any) => void, onError?: (err
 
   const channel = supabase.channel(`public:${table}_${Math.random()}`)
     .on('postgres_changes', { event: '*', schema: 'public', table }, (payload) => {
-      if (currentTenantId && table !== 'organizations') {
+      if (currentTenantId && tableHasOrgId(table)) {
         const itemOrgId = (payload.new as any)?.organization_id || (payload.old as any)?.organization_id;
         if (itemOrgId && itemOrgId !== currentTenantId) return;
       }

@@ -357,12 +357,15 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
       const drug = drugs.find(d => d.id === disposalDrug);
       if (!drug) return;
       
+      const costVal = (drug.costPrice || 0) * disposalQuantity;
+
       await addDoc(collection(db, 'disposals'), {
-        adminId: profile.id,
-        adminName: profile.name,
+        adminId: profile?.id || 'admin',
+        adminName: profile?.name || profile?.email || 'Admin',
         drugId: drug.id,
         drugName: drug.name,
         quantityDisposed: disposalQuantity,
+        costValue: costVal,
         reason: disposalReason,
         notes: disposalNotes,
         createdAt: Date.now()
@@ -370,16 +373,9 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
       
       // Update inventory (deduct disposed qty from system stock)
       const drugRef = doc(db, 'drugs', drug.id);
-      const drugSnap = await getDoc(drugRef);
-      if (drugSnap.exists()) {
-        const d = drugSnap.data();
-        const currentQty = d.branchStock?.['central'] || 0;
-        const newQty = currentQty - disposalQuantity;
-        
-        await updateDoc(drugRef, {
-          'branchStock.central': newQty
-        });
-      }
+      await updateDoc(drugRef, {
+        'branchStock.central': increment(-disposalQuantity)
+      });
       
       setDisposalDrug('');
       setDisposalQuantity(0);
