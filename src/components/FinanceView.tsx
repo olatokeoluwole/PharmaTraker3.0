@@ -128,12 +128,10 @@ export default function FinanceView({
       setIsUpdatingPrice(true);
       const updateData: Record<string, any> = {
         sellingPrice: finalSellingPrice,
-        costPrice: finalCostPrice,
-        
-        lastPriceUpdatedBy: profile?.name || profile?.email || 'Admin'
+        costPrice: finalCostPrice
       };
 
-      await setDoc(doc(db, 'drugs', targetDrugId), updateData, { merge: true });
+      await updateDoc(doc(db, 'drugs', targetDrugId), updateData);
 
       const formattedPrice = finalSellingPrice !== null ? `${currencySymbol}${finalSellingPrice.toLocaleString()}` : 'Not Set';
       setJustSavedPrice(true);

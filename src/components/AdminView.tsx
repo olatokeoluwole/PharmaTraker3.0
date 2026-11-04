@@ -264,12 +264,10 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
     try {
       const costVal = typeof editCostPrice === 'number' ? editCostPrice : null;
       const sellVal = typeof editSellingPrice === 'number' ? editSellingPrice : null;
-      await setDoc(doc(db, 'drugs', drugId), {
+      await updateDoc(doc(db, 'drugs', drugId), {
         costPrice: costVal,
-        sellingPrice: sellVal,
-        
-        lastPriceUpdatedBy: profile?.name || profile?.email || 'Admin'
-      }, { merge: true });
+        sellingPrice: sellVal
+      });
       setEditingDrugId(null);
     } catch (err: any) {
       console.error('Error updating prices:', err);

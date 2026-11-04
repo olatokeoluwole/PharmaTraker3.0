@@ -93,6 +93,17 @@ function toSupabasePayload(data: any, table?: string) {
         snaked.central_stock = snaked.branch_stock.central;
       }
     }
+    // Only allow columns that actually exist in PostgreSQL 'drugs' table
+    const validDrugColumns = new Set([
+      'id', 'name', 'unit', 'category', 'central_stock', 'branch_stock',
+      'cost_price', 'selling_price', 'expiry_date', 'created_at', 'updated_at',
+      'organization_id'
+    ]);
+    for (const key of Object.keys(snaked)) {
+      if (!validDrugColumns.has(key)) {
+        delete snaked[key];
+      }
+    }
   }
 
   return snaked;
@@ -195,6 +206,14 @@ export async function setDoc(docRef: any, data: any, options?: { merge?: boolean
   payload[pk] = docRef.id;
   if (currentTenantId && table !== 'organizations' && !payload.organization_id) {
     payload.organization_id = currentTenantId;
+  }
+  if (options?.merge) {
+    const updatePayload = { ...payload };
+    delete updatePayload[pk];
+    const { data: updated, error: updateError } = await supabase.from(table).update(updatePayload).eq(pk, docRef.id).select();
+    if (!updateError && updated && updated.length > 0) {
+      return;
+    }
   }
   const { error } = await supabase.from(table).upsert(payload);
   if (error) { console.error("setDoc error", error); throw error; }
