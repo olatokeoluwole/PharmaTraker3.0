@@ -396,6 +396,9 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
       const user = users.find(u => u.id === auditUserId);
       if (!drug || !user) return;
 
+      const costVal = (drug.costPrice || 0) * auditMissingQty;
+      const sellingVal = (drug.sellingPrice || 0) * auditMissingQty;
+
       await addDoc(collection(db, 'audits'), {
         adminId: profile?.id || 'admin',
         adminName: profile?.name || profile?.email || 'Admin',
@@ -404,6 +407,8 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
         expectedQuantity: 0,
         actualQuantity: 0,
         discrepancy: auditMissingQty,
+        costValue: costVal,
+        sellingValue: sellingVal,
         responsibleUserId: user.id,
         responsibleUserName: user.name,
         notes: auditNotes,
@@ -411,20 +416,9 @@ export default function AdminView({ profile }: { profile: UserProfile }) {
       });
 
       const drugRef = doc(db, 'drugs', drug.id);
-      const drugSnap = await getDoc(drugRef);
-      if (drugSnap.exists()) {
-        const d = drugSnap.data();
-        const currentQty = d.branchStock?.['central'] || 0;
-        const newQty = currentQty - auditMissingQty;
-        
-        await updateDoc(drugRef, {
-          'branchStock.central': newQty
-        });
-      } else {
-        await updateDoc(drugRef, {
-          'branchStock.central': increment(-auditMissingQty)
-        });
-      }
+      await updateDoc(drugRef, {
+        'branchStock.central': increment(-auditMissingQty)
+      });
       
       setAuditDrug('');
       setAuditMissingQty(0);

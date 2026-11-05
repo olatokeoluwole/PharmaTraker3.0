@@ -65,8 +65,8 @@ export default function DoctorView({ profile, readOnly = false }: { profile: Use
       const totalPrice = unitPrice * quantity;
 
       const prescriptionPayload: any = {
-        doctorId: profile.id,
-        doctorName: profile.name,
+        doctorId: profile?.id || 'doc',
+        doctorName: profile?.name || profile?.email || 'Doctor',
         patientName,
         drugId: drug.id,
         drugName: drug.name,
@@ -86,9 +86,9 @@ export default function DoctorView({ profile, readOnly = false }: { profile: Use
       setPatientName('');
       setQuantity(0);
       alert('Prescription authorized and sent to branch.');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Error creating prescription');
+      alert('Error creating prescription: ' + (err?.message || 'Check network / database permissions'));
     } finally {
       setIsSubmitting(false);
     }

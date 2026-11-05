@@ -65,8 +65,8 @@ export default function HMOView({ profile, readOnly = false }: { profile: UserPr
       const totalPrice = unitPrice * quantity;
 
       const prescriptionPayload: any = {
-        doctorId: profile.id,
-        doctorName: profile.name,
+        doctorId: profile?.id || 'hmo',
+        doctorName: profile?.name || profile?.email || 'HMO',
         patientName,
         drugId: drug.id,
         drugName: drug.name,
@@ -86,9 +86,9 @@ export default function HMOView({ profile, readOnly = false }: { profile: UserPr
       setPatientName('');
       setQuantity(0);
       alert('Order authorized and sent to branch.');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Error creating order');
+      alert('Error creating order: ' + (err?.message || 'Check network / database permissions'));
     } finally {
       setIsSubmitting(false);
     }

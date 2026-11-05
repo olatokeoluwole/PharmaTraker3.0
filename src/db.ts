@@ -16,6 +16,61 @@ function tableHasOrgId(table: string): boolean {
   return tablesWithOrgId.has(table);
 }
 
+// Complete column schemas for Supabase tables to prevent schema cache rejections
+const TABLE_SCHEMAS: Record<string, Set<string>> = {
+  drugs: new Set([
+    'id', 'name', 'unit', 'category', 'central_stock', 'branch_stock',
+    'cost_price', 'selling_price', 'expiry_date', 'created_at', 'updated_at',
+    'organization_id'
+  ]),
+  purchases: new Set([
+    'id', 'drug_id', 'drug_name', 'quantity', 'unit_cost_price', 'total_cost_price',
+    'supplier', 'invoice_number', 'expiry_date', 'created_by', 'created_by_name',
+    'created_at', 'organization_id'
+  ]),
+  operating_expenses: new Set([
+    'id', 'category', 'amount', 'description', 'date', 'created_by',
+    'created_by_name', 'created_at', 'organization_id'
+  ]),
+  dispense_records: new Set([
+    'id', 'drug_id', 'drug_name', 'quantity', 'location_id', 'dispensed_by',
+    'dispensed_by_name', 'patient_id', 'prescription_id', 'selling_price',
+    'total_amount', 'payment_method', 'hmo_provider', 'status', 'created_at',
+    'organization_id'
+  ]),
+  prescriptions: new Set([
+    'id', 'doctor_id', 'doctor_name', 'patient_name', 'drug_id', 'drug_name',
+    'quantity', 'unit_price', 'total_price', 'status', 'target_branch_id',
+    'created_at', 'organization_id'
+  ]),
+  disposals: new Set([
+    'id', 'drug_id', 'drug_name', 'quantity', 'cost_value', 'reason', 'notes',
+    'reported_by', 'reported_by_name', 'created_at'
+  ]),
+  audits: new Set([
+    'id', 'drug_id', 'drug_name', 'missing_quantity', 'cost_value', 'selling_value',
+    'responsible_user_id', 'reported_by', 'reported_by_name', 'notes',
+    'created_at', 'organization_id'
+  ]),
+  branches: new Set([
+    'id', 'name', 'address', 'email', 'created_at', 'updated_at', 'organization_id'
+  ]),
+  inter_branch_transfers: new Set([
+    'id', 'drug_id', 'drug_name', 'from_location_id', 'to_location_id',
+    'quantity_transferred', 'requested_by', 'requested_by_name', 'status',
+    'created_at', 'updated_at', 'organization_id'
+  ]),
+  organizations: new Set([
+    'id', 'name', 'status', 'created_at'
+  ]),
+  users: new Set([
+    'id', 'name', 'email', 'role', 'location_id', 'created_at', 'organization_id'
+  ]),
+  staff_roles: new Set([
+    'email', 'name', 'role', 'location_id', 'created_at', 'organization_id'
+  ])
+};
+
 const toSnake = (str: string) => str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 const toCamel = (str: string) => str.replace(/_([a-z])/g, (_, g) => g.toUpperCase());
 
@@ -40,96 +95,55 @@ function toSupabasePayload(data: any, table?: string) {
 
   // Schema-specific column alignments for Supabase tables
   if (table === 'purchases') {
-    if (snaked.quantity === undefined && snaked.quantity_purchased !== undefined) {
-      snaked.quantity = snaked.quantity_purchased;
-    }
-    delete snaked.quantity_purchased;
-
-    if (snaked.total_cost_price === undefined) {
-      if (snaked.total_cost !== undefined) {
-        snaked.total_cost_price = snaked.total_cost;
-      } else if (snaked.unit_cost_price !== undefined && snaked.quantity !== undefined) {
-        snaked.total_cost_price = snaked.unit_cost_price * snaked.quantity;
-      }
-    }
-    delete snaked.total_cost;
-
-    if (snaked.created_by === undefined && snaked.admin_id !== undefined) {
-      snaked.created_by = snaked.admin_id;
-    }
-    delete snaked.admin_id;
-
-    if (snaked.created_by_name === undefined && snaked.admin_name !== undefined) {
-      snaked.created_by_name = snaked.admin_name;
-    }
-    delete snaked.admin_name;
+    snaked.quantity = snaked.quantity ?? snaked.quantity_purchased ?? 0;
+    snaked.total_cost_price = snaked.total_cost_price ?? snaked.total_cost ?? ((snaked.unit_cost_price || 0) * (snaked.quantity || 0));
+    snaked.created_by = snaked.created_by ?? snaked.admin_id;
+    snaked.created_by_name = snaked.created_by_name ?? snaked.admin_name;
+  } else if (table === 'operating_expenses') {
+    snaked.date = snaked.date ?? snaked.expense_date ?? new Date().toISOString().split('T')[0];
+    snaked.created_by = snaked.created_by ?? snaked.admin_id;
+    snaked.created_by_name = snaked.created_by_name ?? snaked.admin_name;
+  } else if (table === 'dispense_records') {
+    snaked.quantity = snaked.quantity ?? snaked.quantity_dispensed ?? 0;
+    snaked.location_id = snaked.location_id ?? snaked.branch_id;
+    snaked.selling_price = snaked.selling_price ?? snaked.unit_price ?? 0;
+    snaked.total_amount = snaked.total_amount ?? ((snaked.selling_price || 0) * (snaked.quantity || 0));
+    snaked.patient_id = snaked.patient_id ?? snaked.patient_name;
+    snaked.dispensed_by = snaked.dispensed_by ?? snaked.user_id ?? snaked.admin_id;
+    snaked.dispensed_by_name = snaked.dispensed_by_name ?? snaked.user_name ?? snaked.admin_name;
   } else if (table === 'disposals') {
-    if (snaked.quantity === undefined && snaked.quantity_disposed !== undefined) {
-      snaked.quantity = snaked.quantity_disposed;
-    }
-    delete snaked.quantity_disposed;
-
-    if (snaked.reported_by === undefined && snaked.admin_id !== undefined) {
-      snaked.reported_by = snaked.admin_id;
-    }
-    delete snaked.admin_id;
-
-    if (snaked.reported_by_name === undefined && snaked.admin_name !== undefined) {
-      snaked.reported_by_name = snaked.admin_name;
-    }
-    delete snaked.admin_name;
-
-    delete snaked.organization_id;
-
-    const validDisposalColumns = new Set([
-      'id', 'drug_id', 'drug_name', 'quantity', 'cost_value', 'reason', 'notes',
-      'reported_by', 'reported_by_name', 'created_at'
-    ]);
-    for (const key of Object.keys(snaked)) {
-      if (!validDisposalColumns.has(key)) {
-        delete snaked[key];
-      }
-    }
+    snaked.quantity = snaked.quantity ?? snaked.quantity_disposed ?? 0;
+    snaked.reported_by = snaked.reported_by ?? snaked.admin_id;
+    snaked.reported_by_name = snaked.reported_by_name ?? snaked.admin_name;
   } else if (table === 'audits') {
-    if (snaked.missing_quantity === undefined) {
-      snaked.missing_quantity = snaked.discrepancy ?? snaked.audit_missing_qty ?? 0;
-    }
-    delete snaked.discrepancy;
-    delete snaked.audit_missing_qty;
-
-    if (snaked.reported_by === undefined && snaked.admin_id !== undefined) {
-      snaked.reported_by = snaked.admin_id;
-    }
-    delete snaked.admin_id;
-
-    if (snaked.reported_by_name === undefined && snaked.admin_name !== undefined) {
-      snaked.reported_by_name = snaked.admin_name;
-    }
-    delete snaked.admin_name;
-
-    const validAuditColumns = new Set([
-      'id', 'drug_id', 'drug_name', 'missing_quantity', 'cost_value', 'selling_value',
-      'responsible_user_id', 'reported_by', 'reported_by_name', 'notes', 'created_at', 'organization_id'
-    ]);
-    for (const key of Object.keys(snaked)) {
-      if (!validAuditColumns.has(key)) {
-        delete snaked[key];
-      }
-    }
+    snaked.missing_quantity = snaked.missing_quantity ?? snaked.discrepancy ?? snaked.audit_missing_qty ?? 0;
+    snaked.reported_by = snaked.reported_by ?? snaked.admin_id;
+    snaked.reported_by_name = snaked.reported_by_name ?? snaked.admin_name;
+    snaked.cost_value = snaked.cost_value ?? 0;
+    snaked.selling_value = snaked.selling_value ?? 0;
+  } else if (table === 'inter_branch_transfers') {
+    snaked.quantity_transferred = snaked.quantity_transferred ?? snaked.quantity ?? 0;
   } else if (table === 'drugs') {
     if (snaked.branch_stock && typeof snaked.branch_stock === 'object') {
       if (snaked.central_stock === undefined && snaked.branch_stock.central !== undefined) {
         snaked.central_stock = snaked.branch_stock.central;
       }
     }
-    // Only allow columns that actually exist in PostgreSQL 'drugs' table
-    const validDrugColumns = new Set([
-      'id', 'name', 'unit', 'category', 'central_stock', 'branch_stock',
-      'cost_price', 'selling_price', 'expiry_date', 'created_at', 'updated_at',
-      'organization_id'
-    ]);
+  }
+
+  // Ensure foreign key drug_id is a valid UUID or null to prevent foreign key constraint rejections
+  if (snaked.drug_id !== undefined && snaked.drug_id !== null) {
+    const isUuid = typeof snaked.drug_id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(snaked.drug_id);
+    if (!isUuid) {
+      snaked.drug_id = null;
+    }
+  }
+
+  // Strict whitelist against table schema: strip any column not in table
+  if (table && TABLE_SCHEMAS[table]) {
+    const valid = TABLE_SCHEMAS[table];
     for (const key of Object.keys(snaked)) {
-      if (!validDrugColumns.has(key)) {
+      if (!valid.has(key)) {
         delete snaked[key];
       }
     }
@@ -165,12 +179,27 @@ function fromSupabaseData(data: any, table?: string) {
     const creatorName = cameled.adminName ?? cameled.createdByName ?? '';
     cameled.adminName = creatorName;
     cameled.createdByName = creatorName;
+  } else if (table === 'operating_expenses') {
+    cameled.expenseDate = cameled.expenseDate ?? cameled.date;
+    cameled.date = cameled.date ?? cameled.expenseDate;
+    cameled.adminId = cameled.adminId ?? cameled.createdBy ?? '';
+    cameled.adminName = cameled.adminName ?? cameled.createdByName ?? '';
+  } else if (table === 'dispense_records') {
+    cameled.quantityDispensed = cameled.quantityDispensed ?? cameled.quantity ?? 0;
+    cameled.quantity = cameled.quantity ?? cameled.quantityDispensed ?? 0;
+    cameled.branchId = cameled.branchId ?? cameled.locationId;
+    cameled.locationId = cameled.locationId ?? cameled.branchId;
+    cameled.unitPrice = cameled.unitPrice ?? cameled.sellingPrice ?? 0;
+    cameled.sellingPrice = cameled.sellingPrice ?? cameled.unitPrice ?? 0;
+    cameled.patientName = cameled.patientName ?? cameled.patientId;
   } else if (table === 'disposals') {
     cameled.quantityDisposed = cameled.quantityDisposed ?? cameled.quantity ?? 0;
+    cameled.quantity = cameled.quantity ?? cameled.quantityDisposed ?? 0;
     cameled.adminId = cameled.adminId ?? cameled.reportedBy ?? '';
     cameled.adminName = cameled.adminName ?? cameled.reportedByName ?? '';
   } else if (table === 'audits') {
     cameled.discrepancy = cameled.discrepancy ?? cameled.missingQuantity ?? 0;
+    cameled.missingQuantity = cameled.missingQuantity ?? cameled.discrepancy ?? 0;
     cameled.adminId = cameled.adminId ?? cameled.reportedBy ?? '';
     cameled.adminName = cameled.adminName ?? cameled.reportedByName ?? '';
   }

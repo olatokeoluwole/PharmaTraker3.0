@@ -273,8 +273,8 @@ export default function FinanceView({
     try {
       setIsSubmittingExpense(true);
       const expensePayload: any = {
-        adminId: profile.id,
-        adminName: profile.name,
+        adminId: profile?.id || 'admin',
+        adminName: profile?.name || profile?.email || 'Admin',
         category: expenseCategory,
         amount: Number(expenseAmount),
         expenseDate: expenseDate || format(new Date(), 'yyyy-MM-dd'),
@@ -298,9 +298,9 @@ export default function FinanceView({
       setExpenseReference('');
       setShowExpenseModal(false);
       alert('Operating expense recorded successfully.');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error recording expense:', err);
-      alert('Failed to record operating expense. Please check your network and permissions.');
+      alert('Failed to record operating expense: ' + (err?.message || 'Please check your network and permissions.'));
     } finally {
       setIsSubmittingExpense(false);
     }

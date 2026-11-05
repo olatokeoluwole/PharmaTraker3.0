@@ -51,14 +51,13 @@ export default function StoreView({ profile, readOnly = false }: { profile: User
       }
 
       await addDoc(collection(db, 'inter_branch_transfers'), {
-        requestedBy: profile.id,
-        requestedByName: profile.name,
+        requestedBy: profile?.id || 'storekeeper',
+        requestedByName: profile?.name || profile?.email || 'Store Keeper',
         drugId: drug.id,
         drugName: drug.name,
         fromLocationId: locId,
         toLocationId: targetLocation,
         status: 'approved',
-        
         quantityTransferred: transferQuantity,
         createdAt: Date.now()
       });
@@ -70,14 +69,14 @@ export default function StoreView({ profile, readOnly = false }: { profile: User
         ['branchStock.' + targetLocation]: increment(transferQuantity)
       };
       
-      const newStoreQty = storeQty - transferQuantity;
       await updateDoc(drugRef, payload);
 
       setSelectedDrug('');
       setTransferQuantity(0);
-    } catch (err) {
+      alert('Stock successfully transferred!');
+    } catch (err: any) {
       console.error(err);
-      alert('Error transferring stock');
+      alert('Error transferring stock: ' + (err?.message || 'Check connection / permissions'));
     }
   };
 

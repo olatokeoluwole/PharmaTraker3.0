@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../db';
-import { collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, getDoc } from '../db';
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, getDoc, increment } from '../db';
 import { UserProfile, Prescription, Drug, DispenseRecord } from '../types';
 import { Check, Clock, PackageOpen, Plus, DollarSign, CreditCard, ShoppingCart, TrendingUp, AlertCircle, Lock, ShieldCheck } from 'lucide-react';
 import { format } from 'date-fns';
@@ -99,6 +99,8 @@ export default function BranchView({ profile, readOnly = false }: { profile: Use
         totalAmount: totalAmount,
         patientName: prescription.patientName,
         paymentMethod: dispensePaymentMethod,
+        dispensedBy: profile?.id || 'staff',
+        dispensedByName: profile?.name || profile?.email || 'Staff',
         createdAt: Date.now()
       });
 
@@ -111,22 +113,14 @@ export default function BranchView({ profile, readOnly = false }: { profile: Use
 
       // Update inventory quantity in branch
       const drugRef = doc(db, 'drugs', prescription.drugId);
-      const drugSnap = await getDoc(drugRef);
-      
-      if (drugSnap.exists()) {
-        const drugData = drugSnap.data();
-        const currentQty = drugData.branchStock?.[locId] || 0;
-        const newQty = Math.max(0, currentQty - prescription.quantity);
-        
-        await updateDoc(drugRef, {
-          ['branchStock.' + locId]: newQty
-        });
-      }
+      await updateDoc(drugRef, {
+        ['branchStock.' + locId]: increment(-prescription.quantity)
+      });
 
       setSelectedPrescriptionForDispense(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Error dispensing medication. Please check permissions or connection.');
+      alert('Error dispensing medication: ' + (err?.message || 'Please check permissions or connection.'));
     } finally {
       setProcessingId(null);
     }
@@ -170,13 +164,14 @@ export default function BranchView({ profile, readOnly = false }: { profile: Use
         totalAmount: totalAmount,
         patientName: directSalePatientName.trim() || 'Walk-in Customer',
         paymentMethod: directSalePaymentMethod,
+        dispensedBy: profile?.id || 'staff',
+        dispensedByName: profile?.name || profile?.email || 'Staff',
         createdAt: Date.now()
       });
 
       // Deduct from branch stock (does NOT alter sellingPrice or costPrice)
-      const newQty = availableQty - qtyToSell;
       await updateDoc(doc(db, 'drugs', drug.id), {
-        ['branchStock.' + locId]: newQty
+        ['branchStock.' + locId]: increment(-qtyToSell)
       });
 
       // Reset form
@@ -186,9 +181,9 @@ export default function BranchView({ profile, readOnly = false }: { profile: Use
       setShowDirectSaleModal(false);
       setDirectSaleSuccess('Sale completed and income recorded successfully.');
       setTimeout(() => setDirectSaleSuccess(''), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error logging direct sale:', err);
-      setDirectSaleError('Failed to complete sale. Please try again.');
+      setDirectSaleError('Failed to complete sale: ' + (err?.message || 'Please try again.'));
     } finally {
       setIsSubmittingDirectSale(false);
     }
