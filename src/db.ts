@@ -128,6 +128,11 @@ function toSupabasePayload(data: any, table?: string) {
       if (snaked.central_stock === undefined && snaked.branch_stock.central !== undefined) {
         snaked.central_stock = snaked.branch_stock.central;
       }
+      if (snaked.central_stock !== undefined && snaked.branch_stock.central === undefined) {
+        snaked.branch_stock.central = snaked.central_stock;
+      }
+    } else if (snaked.central_stock !== undefined) {
+      snaked.branch_stock = { central: snaked.central_stock };
     }
   }
 
@@ -228,11 +233,18 @@ function fromSupabaseData(data: any, table?: string) {
     if (!cameled.branchStock || typeof cameled.branchStock !== 'object') {
       cameled.branchStock = {};
     }
-    if (cameled.branchStock.central === undefined && cameled.centralStock !== undefined) {
-      cameled.branchStock.central = Number(cameled.centralStock) || 0;
-    }
-    if (cameled.centralStock === undefined && cameled.branchStock.central !== undefined) {
-      cameled.centralStock = Number(cameled.branchStock.central) || 0;
+    const cStock = (cameled.centralStock !== undefined && cameled.centralStock !== null) ? Number(cameled.centralStock) : undefined;
+    const bStock = (cameled.branchStock.central !== undefined && cameled.branchStock.central !== null) ? Number(cameled.branchStock.central) : undefined;
+    if (cStock !== undefined && bStock === undefined) {
+      cameled.branchStock.central = cStock;
+      cameled.centralStock = cStock;
+    } else if (bStock !== undefined && cStock === undefined) {
+      cameled.centralStock = bStock;
+      cameled.branchStock.central = bStock;
+    } else if (cStock !== undefined && bStock !== undefined) {
+      const maxVal = Math.max(cStock, bStock);
+      cameled.centralStock = maxVal;
+      cameled.branchStock.central = maxVal;
     }
   }
 
@@ -272,6 +284,24 @@ export class Timestamp {
   toMillis() { return this.seconds * 1000 + this.nanoseconds / 1000000; }
 }
 
+export const syncBus = typeof window !== 'undefined' ? new EventTarget() : null;
+export const broadcastChannel = (typeof window !== 'undefined' && 'BroadcastChannel' in window) 
+  ? new BroadcastChannel('pharmatracker_sync_channel') 
+  : null;
+
+export function notifyMutation(table: string) {
+  if (syncBus) {
+    syncBus.dispatchEvent(new CustomEvent('mutation', { detail: { table } }));
+  }
+  if (broadcastChannel) {
+    try {
+      broadcastChannel.postMessage({ table, timestamp: Date.now() });
+    } catch {
+      // ignore
+    }
+  }
+}
+
 function getPrimaryKey(table: string) {
   if (table === 'staff_roles') return 'email';
   return 'id';
@@ -286,6 +316,7 @@ export async function addDoc(colRef: any, data: any) {
   const { data: res, error } = await supabase.from(table).insert(payload).select().single();
   if (error) { console.error("addDoc error", error); throw error; }
   const pk = getPrimaryKey(table);
+  notifyMutation(table);
   return { id: res[pk] };
 }
 
@@ -302,11 +333,13 @@ export async function setDoc(docRef: any, data: any, options?: { merge?: boolean
     delete updatePayload[pk];
     const { data: updated, error: updateError } = await supabase.from(table).update(updatePayload).eq(pk, docRef.id).select();
     if (!updateError && updated && updated.length > 0) {
+      notifyMutation(table);
       return;
     }
   }
   const { error } = await supabase.from(table).upsert(payload);
   if (error) { console.error("setDoc error", error); throw error; }
+  notifyMutation(table);
 }
 
 export async function updateDoc(docRef: any, data: any) {
@@ -369,6 +402,7 @@ export async function updateDoc(docRef: any, data: any) {
 
   const { error } = await supabase.from(table).update(payload).eq(pk, docRef.id);
   if (error) { console.error("updateDoc error", error); throw error; }
+  notifyMutation(table);
 }
 
 export async function deleteDoc(docRef: any) {
@@ -389,6 +423,7 @@ export async function deleteDoc(docRef: any) {
 
   const { error } = await supabase.from(table).delete().eq(pk, docRef.id);
   if (error) { console.error("deleteDoc error", error); throw error; }
+  notifyMutation(table);
 }
 
 export async function getDoc(docRef: any) {
@@ -431,18 +466,22 @@ export function writeBatch(dbRef: any) {
     update(docRef: any, data: any) { ops.push(updateDoc(docRef, data)); },
     set(docRef: any, data: any, opts?: any) { ops.push(setDoc(docRef, data, opts)); },
     delete(docRef: any) { ops.push(deleteDoc(docRef)); },
-    async commit() { await Promise.all(ops); }
+    async commit() { 
+      await Promise.all(ops);
+      notifyMutation('');
+    }
   };
 }
 
 export function onSnapshot(ref: any, onNext: (snap: any) => void, onError?: (err: any) => void) {
   const table = ref.path;
   let currentData: any[] = [];
+  let isDisposed = false;
 
   const emit = () => {
+    if (isDisposed) return;
     let sorted = [...currentData];
     if (ref.constraints) {
-      // Apply where clauses locally
       for (const c of ref.constraints) {
         if (c._type === 'where') {
           sorted = sorted.filter(item => {
@@ -456,7 +495,6 @@ export function onSnapshot(ref: any, onNext: (snap: any) => void, onError?: (err
           });
         }
       }
-      // Apply sorting
       const order = ref.constraints.find((c: any) => c._type === 'orderBy');
       if (order) {
         sorted.sort((a, b) => {
@@ -475,53 +513,104 @@ export function onSnapshot(ref: any, onNext: (snap: any) => void, onError?: (err
     }) });
   };
 
-  let sbQuery = supabase.from(table).select('*');
-  if (currentTenantId && tableHasOrgId(table)) {
-    sbQuery = sbQuery.eq('organization_id', currentTenantId);
-  }
-  if (ref.constraints) {
-    for (const c of ref.constraints) {
-      if (c._type === 'where') {
-         if (c.op === '==') sbQuery = sbQuery.eq(toSnake(c.field), c.value);
-         else if (c.op === '>') sbQuery = sbQuery.gt(toSnake(c.field), c.value);
-         else if (c.op === '<') sbQuery = sbQuery.lt(toSnake(c.field), c.value);
-         else if (c.op === '>=') sbQuery = sbQuery.gte(toSnake(c.field), c.value);
-         else if (c.op === '<=') sbQuery = sbQuery.lte(toSnake(c.field), c.value);
+  const fetchAndEmit = async () => {
+    if (isDisposed) return;
+    try {
+      let sbQuery = supabase.from(table).select('*');
+      if (currentTenantId && tableHasOrgId(table)) {
+        sbQuery = sbQuery.eq('organization_id', currentTenantId);
       }
-      if (c._type === 'orderBy') {
-        sbQuery = sbQuery.order(toSnake(c.field), { ascending: c.direction === 'asc' });
+      if (ref.constraints) {
+        for (const c of ref.constraints) {
+          if (c._type === 'where') {
+             if (c.op === '==') sbQuery = sbQuery.eq(toSnake(c.field), c.value);
+             else if (c.op === '>') sbQuery = sbQuery.gt(toSnake(c.field), c.value);
+             else if (c.op === '<') sbQuery = sbQuery.lt(toSnake(c.field), c.value);
+             else if (c.op === '>=') sbQuery = sbQuery.gte(toSnake(c.field), c.value);
+             else if (c.op === '<=') sbQuery = sbQuery.lte(toSnake(c.field), c.value);
+          }
+          if (c._type === 'orderBy') {
+            sbQuery = sbQuery.order(toSnake(c.field), { ascending: c.direction === 'asc' });
+          }
+          if (c._type === 'limit') {
+            sbQuery = sbQuery.limit(c.value);
+          }
+        }
       }
-      if (c._type === 'limit') {
-        sbQuery = sbQuery.limit(c.value);
+      const { data, error } = await sbQuery;
+      if (error) {
+        if (onError) onError(error);
+        return;
       }
+      if (isDisposed) return;
+      currentData = (data || []).map(d => fromSupabaseData(d, table));
+      emit();
+    } catch (e: any) {
+      if (onError) onError(e);
     }
-  }
+  };
 
-  sbQuery.then(({ data, error }) => {
-    if (error) { if (onError) onError(error); return; }
-    currentData = (data || []).map(d => fromSupabaseData(d, table));
-    emit();
-  });
+  // Initial fetch
+  fetchAndEmit();
 
+  // 1. Supabase Postgres changes subscription
   const channel = supabase.channel(`public:${table}_${Math.random()}`)
     .on('postgres_changes', { event: '*', schema: 'public', table }, (payload) => {
       if (currentTenantId && tableHasOrgId(table)) {
         const itemOrgId = (payload.new as any)?.organization_id || (payload.old as any)?.organization_id;
         if (itemOrgId && itemOrgId !== currentTenantId) return;
       }
-      const pk = getPrimaryKey(table);
-      const camelPk = toCamel(pk);
-      if (payload.eventType === 'INSERT') {
-        currentData.unshift(fromSupabaseData(payload.new, table));
-      } else if (payload.eventType === 'UPDATE') {
-        const updated = fromSupabaseData(payload.new, table);
-        currentData = currentData.map(item => item[camelPk] === updated[camelPk] ? updated : item);
-      } else if (payload.eventType === 'DELETE') {
-        currentData = currentData.filter(item => item[camelPk] !== payload.old[pk]);
-      }
-      emit();
+      fetchAndEmit();
     })
     .subscribe();
 
-  return () => { supabase.removeChannel(channel); };
+  // 2. Active 3-second background polling timer for guaranteed cross-device real-time sync
+  const pollTimer = setInterval(() => {
+    fetchAndEmit();
+  }, 3000);
+
+  // 3. Tab visibility / focus sync
+  const handleFocus = () => {
+    fetchAndEmit();
+  };
+  if (typeof window !== 'undefined') {
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+  }
+
+  // 4. Local mutation sync bus (same tab immediate sync)
+  const handleLocalMutation = (e: any) => {
+    if (e.detail?.table === table || !e.detail?.table) {
+      fetchAndEmit();
+    }
+  };
+  if (syncBus) {
+    syncBus.addEventListener('mutation', handleLocalMutation);
+  }
+
+  // 5. Cross-tab BroadcastChannel sync (multi-tab immediate sync)
+  const handleBroadcast = (e: MessageEvent) => {
+    if (e.data?.table === table || !e.data?.table) {
+      fetchAndEmit();
+    }
+  };
+  if (broadcastChannel) {
+    broadcastChannel.addEventListener('message', handleBroadcast);
+  }
+
+  return () => {
+    isDisposed = true;
+    clearInterval(pollTimer);
+    supabase.removeChannel(channel);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    }
+    if (syncBus) {
+      syncBus.removeEventListener('mutation', handleLocalMutation);
+    }
+    if (broadcastChannel) {
+      broadcastChannel.removeEventListener('message', handleBroadcast);
+    }
+  };
 }
