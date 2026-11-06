@@ -1,20 +1,30 @@
 import React from "react";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { db } from '../db';
 import { collection, onSnapshot, doc, updateDoc, addDoc, increment } from '../db';
 import { UserProfile, Drug, InterBranchTransfer } from '../types';
-import { Package, Send } from 'lucide-react';
-import { format } from 'date-fns';
+import { Package, Send, AlertTriangle } from 'lucide-react';
 
 export default function StoreView({ profile, readOnly = false }: { profile: UserProfile, readOnly?: boolean }) {
-  const locId = profile.locationId || 'central';
+  // Store inventory always defaults to Central Warehouse ('central')
+  const [sourceLocation, setSourceLocation] = useState('central');
+  const locId = sourceLocation || 'central';
   const [targetLocation, setTargetLocation] = useState('');
 
   const [drugs, setDrugs] = useState<Drug[]>([]);
   const [transfers, setTransfers] = useState<InterBranchTransfer[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [selectedDrug, setSelectedDrug] = useState('');
-  const [transferQuantity, setTransferQuantity] = useState(0);
+  const [transferQuantity, setTransferQuantity] = useState<number | ''>('');
+  const [isTransferring, setIsTransferring] = useState(false);
+
+  const resolvedSourceName = sourceLocation === 'central' 
+    ? 'Central Warehouse (Main Store)' 
+    : (branches.find(b => b.id === sourceLocation)?.name || 'Branch Store');
+
+  const resolvedTargetName = targetLocation === 'central' 
+    ? 'Central Warehouse' 
+    : (branches.find(b => b.id === targetLocation)?.name || 'Branch');
 
   useEffect(() => {
     const unsubDrugs = onSnapshot(collection(db, 'drugs'), (snap) => {
@@ -24,6 +34,7 @@ export default function StoreView({ profile, readOnly = false }: { profile: User
     const unsubBranches = onSnapshot(collection(db, 'branches'), (snapshot) => {
       setBranches(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
+
     const unsubTransfers = onSnapshot(collection(db, 'inter_branch_transfers'), (snap) => {
       setTransfers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as InterBranchTransfer)));
     }, (err) => console.warn("StoreView transfers sync notice:", err));
@@ -35,18 +46,57 @@ export default function StoreView({ profile, readOnly = false }: { profile: User
     };
   }, []);
 
+  const getStockAtLoc = (d?: Drug, loc: string = locId): number => {
+    if (!d) return 0;
+    if (loc === 'central') {
+      if (d.branchStock?.central !== undefined && d.branchStock.central !== null) {
+        return Number(d.branchStock.central) || 0;
+      }
+      if (d.centralStock !== undefined && d.centralStock !== null) {
+        return Number(d.centralStock) || 0;
+      }
+    }
+    return Number(d.branchStock?.[loc] || 0);
+  };
+
+  const getTotalChainStock = (d?: Drug): number => {
+    if (!d) return 0;
+    const central = getStockAtLoc(d, 'central');
+    const branchSum = Object.entries(d.branchStock || {})
+      .filter(([k]) => k !== 'central')
+      .reduce((sum, [_, v]) => sum + (Number(v) || 0), 0);
+    return central + branchSum;
+  };
+
+  const lowStockDrugs = useMemo(() => {
+    return drugs.filter(d => getTotalChainStock(d) <= 20);
+  }, [drugs]);
+
   const handleTransfer = async (e: React.FormEvent) => {
-    if (!targetLocation) return;
     e.preventDefault();
-    if (!selectedDrug || transferQuantity <= 0) return;
+    if (!targetLocation) {
+      alert('Please select a destination target location.');
+      return;
+    }
+    if (targetLocation === sourceLocation) {
+      alert('Destination cannot be the same as the source location.');
+      return;
+    }
+    if (!selectedDrug || !transferQuantity || Number(transferQuantity) <= 0 || isTransferring) {
+      alert('Please select a drug and a valid quantity to transfer.');
+      return;
+    }
+
     try {
+      setIsTransferring(true);
       const drug = drugs.find(d => d.id === selectedDrug);
       if (!drug) return;
 
-      const storeQty = drug.branchStock?.[locId] || 0;
+      const qty = Number(transferQuantity);
+      const availableStoreQty = getStockAtLoc(drug, locId);
 
-      if (transferQuantity > storeQty) {
-        alert('Insufficient stock in the store to transfer.');
+      if (qty > availableStoreQty) {
+        alert(`Insufficient stock in ${resolvedSourceName} to transfer. Available: ${availableStoreQty} ${drug.unit || 'units'}`);
         return;
       }
 
@@ -58,50 +108,79 @@ export default function StoreView({ profile, readOnly = false }: { profile: User
         fromLocationId: locId,
         toLocationId: targetLocation,
         status: 'approved',
-        quantityTransferred: transferQuantity,
+        quantityTransferred: qty,
         createdAt: Date.now()
       });
 
       const drugRef = doc(db, 'drugs', drug.id);
-      
       const payload: any = {
-        ['branchStock.' + locId]: increment(-transferQuantity),
-        ['branchStock.' + targetLocation]: increment(transferQuantity)
+        ['branchStock.' + locId]: increment(-qty),
+        ['branchStock.' + targetLocation]: increment(qty)
       };
       
       await updateDoc(drugRef, payload);
 
       setSelectedDrug('');
-      setTransferQuantity(0);
-      alert('Stock successfully transferred!');
+      setTransferQuantity('');
+      alert(`Successfully transferred ${qty} ${drug.unit || 'units'} of ${drug.name} from ${resolvedSourceName} to ${resolvedTargetName}!`);
     } catch (err: any) {
       console.error(err);
       alert('Error transferring stock: ' + (err?.message || 'Check connection / permissions'));
+    } finally {
+      setIsTransferring(false);
     }
   };
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Global Low-Stock Alerts */}
-      {drugs.filter(d => (Object.values(d.branchStock || {}) as number[]).reduce<number>((a, b) => a + (b || 0), 0) <= 20).length > 0 && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4 rounded shadow-sm">
+      {/* Header with Location Switcher */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Store & Distribution Hub</h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Managing Inventory For: <strong className="text-indigo-700">{resolvedSourceName}</strong>
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-lg p-1.5 shadow-xs">
+            <span className="text-[11px] font-bold text-slate-500 pl-1.5">Active Location:</span>
+            <select
+              className="p-1 rounded text-xs bg-transparent focus:outline-none focus:text-indigo-600 font-bold text-slate-700"
+              value={sourceLocation}
+              onChange={(e) => {
+                setSourceLocation(e.target.value);
+                setSelectedDrug('');
+              }}
+            >
+              <option value="central">Central Warehouse (Main Store)</option>
+              {branches.map(b => (
+                <option key={b.id} value={b.id}>{b.name} (Branch)</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Global Low-Stock Alerts across entire chain */}
+      {lowStockDrugs.length > 0 && (
+        <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded shadow-xs">
           <div className="flex">
             <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
             </div>
             <div className="ml-3">
-              <h3 className="text-sm leading-5 font-medium text-red-800">
-                Global Low-Stock Alert
+              <h3 className="text-xs font-bold text-amber-900 uppercase tracking-wide">
+                Global Low-Stock Alert (Chain-wide &le; 20 units)
               </h3>
-              <div className="mt-2 text-sm leading-5 text-red-700">
-                <p>The following items are running low across the ENTIRE chain and require central restocking:</p>
-                <ul className="list-disc pl-5 mt-1">
-                  {drugs.filter(d => (Object.values(d.branchStock || {}) as number[]).reduce<number>((a, b) => a + (b || 0), 0) <= 20).map(d => (
-                    <li key={d.id}>{d.name} ({(Object.values(d.branchStock || {}) as number[]).reduce<number>((a, b) => a + (b || 0), 0)} remaining globally)</li>
+              <div className="mt-1 text-xs text-amber-800">
+                <p>The following items are running low across the entire pharmacy network and require vendor restocking:</p>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {lowStockDrugs.map(d => (
+                    <span key={d.id} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-100/80 text-amber-900 border border-amber-200">
+                      {d.name}: {getTotalChainStock(d)} remaining globally
+                    </span>
                   ))}
-                </ul>
+                </div>
               </div>
             </div>
           </div>
@@ -111,105 +190,159 @@ export default function StoreView({ profile, readOnly = false }: { profile: User
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Transfer form */}
         <div className="lg:col-span-1 flex flex-col gap-4">
-          <section className="flex flex-col bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
+          <section className="flex flex-col bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
               <h2 className="font-bold text-slate-700 uppercase text-xs flex items-center">
-                <Send className="w-4 h-4 mr-2" />
-                Transfer to Branch
+                <Send className="w-4 h-4 mr-2 text-indigo-600" />
+                Dispatch / Transfer Stock
               </h2>
+              <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded border border-indigo-100">
+                Inter-Branch
+              </span>
             </div>
             <div className="p-4 flex-1">
-              <form onSubmit={handleTransfer} className="space-y-3">
-                  
+              <form onSubmit={handleTransfer} className="space-y-3.5">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 uppercase">From (Source)</label>
                   <select
+                    value={sourceLocation}
+                    onChange={(e) => {
+                      setSourceLocation(e.target.value);
+                      setSelectedDrug('');
+                    }}
+                    className="w-full p-2 border border-slate-300 rounded text-xs focus:outline-none focus:border-indigo-500 bg-slate-50 font-semibold text-slate-700"
+                  >
+                    <option value="central">Central Warehouse (Main Store)</option>
+                    {branches.map(b => (
+                      <option key={b.id} value={b.id}>{b.name} (Branch)</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 uppercase">To (Destination Branch)</label>
+                  <select
+                    required
                     value={targetLocation}
                     onChange={(e) => setTargetLocation(e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded text-xs focus:outline-none focus:border-slate-400 bg-white"
+                    className="w-full p-2 border border-slate-300 rounded text-xs focus:outline-none focus:border-indigo-500 bg-white font-semibold text-slate-800"
                   >
-                    <option value="">Select Target Location</option>
-                    <option value="central">Central Warehouse</option>
-                    {branches.map(b => (
+                    <option value="">-- Select Target Location --</option>
+                    {sourceLocation !== 'central' && (
+                      <option value="central">Central Warehouse (Return)</option>
+                    )}
+                    {branches.filter(b => b.id !== sourceLocation).map(b => (
                       <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
                   </select>
+                </div>
 
-                <select
-                  required
-                  value={selectedDrug}
-                  onChange={e => setSelectedDrug(e.target.value)}
-                  disabled={readOnly}
-                  className="w-full p-2 border border-slate-300 rounded text-xs bg-white focus:outline-none focus:border-slate-400 disabled:opacity-50"
-                >
-                  <option value="">-- Select Item --</option>
-                  {drugs.map(d => (
-                    <option key={d.id} value={d.id}>
-                      {d.name} (Available: {d.branchStock?.[locId] || 0})
-                    </option>
-                  ))}
-                </select>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 uppercase">Select Medication / Item</label>
+                  <select
                     required
-                    min="1"
-                    placeholder="Qty"
-                    value={transferQuantity || ''}
-                    onChange={e => setTransferQuantity(parseInt(e.target.value))}
+                    value={selectedDrug}
+                    onChange={e => setSelectedDrug(e.target.value)}
                     disabled={readOnly}
-                    className="w-full p-2 border border-slate-300 rounded text-xs focus:outline-none focus:border-slate-400 disabled:opacity-50"
-                  />
-                  <button
-                    type="submit"
-                    disabled={readOnly}
-                    className="w-full py-2 bg-indigo-600 text-white rounded text-xs font-bold shadow-sm hover:bg-indigo-700 transition-colors flex items-center justify-center whitespace-nowrap disabled:opacity-50"
+                    className="w-full p-2 border border-slate-300 rounded text-xs bg-white focus:outline-none focus:border-indigo-500 disabled:opacity-50"
                   >
-                    Transfer
-                  </button>
+                    <option value="">-- Select Item --</option>
+                    {drugs.map(d => {
+                      const avail = getStockAtLoc(d, locId);
+                      return (
+                        <option key={d.id} value={d.id} disabled={avail <= 0}>
+                          {d.name} (Available in {sourceLocation === 'central' ? 'Central' : 'Branch'}: {avail})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 uppercase">Transfer Quantity</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      placeholder="Units to transfer"
+                      value={transferQuantity}
+                      onChange={e => setTransferQuantity(e.target.value === '' ? '' : parseInt(e.target.value))}
+                      disabled={readOnly}
+                      className="w-full p-2 border border-slate-300 rounded text-xs focus:outline-none focus:border-indigo-500 disabled:opacity-50 font-bold"
+                    />
+                    <button
+                      type="submit"
+                      disabled={readOnly || isTransferring || !selectedDrug || !transferQuantity}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold shadow-xs transition-colors flex items-center justify-center whitespace-nowrap disabled:opacity-50 cursor-pointer"
+                    >
+                      {isTransferring ? 'Transferring...' : 'Transfer'}
+                    </button>
+                  </div>
                 </div>
               </form>
             </div>
           </section>
         </div>
 
-        {/* Dashboard */}
+        {/* Inventory List */}
         <div className="lg:col-span-2 flex flex-col gap-4">
-          <section className="flex-1 flex flex-col bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
+          <section className="flex-1 flex flex-col bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-              <h2 className="font-bold text-slate-700 uppercase text-xs flex items-center">
-                <Package className="w-4 h-4 mr-2" /> Store Inventory
-              </h2>
+              <div>
+                <h2 className="font-bold text-slate-700 uppercase text-xs flex items-center">
+                  <Package className="w-4 h-4 mr-2 text-indigo-600" />
+                  Store Inventory
+                </h2>
+                <span className="text-[11px] text-slate-500">
+                  Stock currently held in: <strong className="text-slate-700">{resolvedSourceName}</strong>
+                </span>
+              </div>
+              <span className="px-2.5 py-1 bg-slate-200 text-slate-700 rounded-full text-[10px] font-bold">
+                {drugs.length} Items
+              </span>
             </div>
             <div className="flex-1 overflow-x-auto">
               <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 text-slate-400 font-bold uppercase border-b border-slate-200">
+                <thead className="bg-slate-50 text-slate-400 font-bold uppercase border-b border-slate-200 text-[10px]">
                   <tr>
                     <th className="px-4 py-3">Item Name</th>
                     <th className="px-4 py-3">Category</th>
-                    <th className="px-4 py-3 text-right">Store Qty</th>
+                    <th className="px-4 py-3 text-right">
+                      {sourceLocation === 'central' ? 'Central Store Qty' : 'Location Qty'}
+                    </th>
+                    <th className="px-4 py-3 text-right">Total Chain Stock</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {drugs.map(drug => (
-                    <tr key={drug.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 font-medium text-slate-800">
-                        {drug.name} <span className="text-slate-400 font-normal ml-1">({drug.unit})</span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600 capitalize">
-                        {drug.category || 'medication'}
-                      </td>
-                      <td className="px-4 py-3 text-right font-black tabular-nums">
-                        {(() => {
-                          const qty = drug.branchStock?.[locId] || 0;
-                          if (qty <= 0) return <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 text-xs">0 (Depleted)</span>;
-                          if (qty <= 15) return <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-xs">{qty} (Low)</span>;
-                          return <span className="text-sky-700 font-bold">{qty}</span>;
-                        })()}
-                      </td>
-                    </tr>
-                  ))}
+                  {drugs.map(drug => {
+                    const qty = getStockAtLoc(drug, locId);
+                    const totalChain = getTotalChainStock(drug);
+
+                    return (
+                      <tr key={drug.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 font-medium text-slate-800">
+                          {drug.name} <span className="text-slate-400 font-normal ml-1">({drug.unit || 'units'})</span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 capitalize">
+                          {drug.category || 'medication'}
+                        </td>
+                        <td className="px-4 py-3 text-right font-black tabular-nums">
+                          {(() => {
+                            if (qty <= 0) return <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 text-xs">0 (Depleted)</span>;
+                            if (qty <= 15) return <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-xs">{qty} (Low)</span>;
+                            return <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-bold text-xs">{qty} in store</span>;
+                          })()}
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-slate-600 tabular-nums">
+                          {totalChain} {drug.unit || 'units'}
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {drugs.length === 0 && (
                     <tr>
-                      <td colSpan={3} className="px-4 py-4 text-center text-slate-500">No items available.</td>
+                      <td colSpan={4} className="px-4 py-4 text-center text-slate-500">No items available.</td>
                     </tr>
                   )}
                 </tbody>

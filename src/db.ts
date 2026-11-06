@@ -224,6 +224,16 @@ function fromSupabaseData(data: any, table?: string) {
     cameled.adminName = cameled.adminName ?? cameled.reportedByName ?? '';
   } else if (table === 'inter_branch_transfers') {
     cameled.quantityTransferred = cameled.quantityTransferred ?? cameled.quantity ?? 0;
+  } else if (table === 'drugs' || cameled.centralStock !== undefined || cameled.branchStock !== undefined) {
+    if (!cameled.branchStock || typeof cameled.branchStock !== 'object') {
+      cameled.branchStock = {};
+    }
+    if (cameled.branchStock.central === undefined && cameled.centralStock !== undefined) {
+      cameled.branchStock.central = Number(cameled.centralStock) || 0;
+    }
+    if (cameled.centralStock === undefined && cameled.branchStock.central !== undefined) {
+      cameled.centralStock = Number(cameled.branchStock.central) || 0;
+    }
   }
 
   return cameled;

@@ -24,6 +24,7 @@ export interface Drug {
   category?: string;
   costPrice?: number;
   sellingPrice?: number;
+  centralStock?: number;
   branchStock?: { [locationId: string]: number };
   createdAt: number;
   organizationId?: string;
