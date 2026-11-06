@@ -7,7 +7,7 @@ import { format } from 'date-fns';
 
 export default function BranchView({ profile, readOnly = false }: { profile: UserProfile, readOnly?: boolean }) {
   const [selectedBranchId, setSelectedBranchId] = useState(profile.locationId || '');
-  const locId = readOnly ? selectedBranchId : (profile.locationId || '');
+  const locId = readOnly ? selectedBranchId : (selectedBranchId || profile.locationId || '');
   
   const getBranchStock = (d?: Drug) => {
     if (!d) return 0;
@@ -23,7 +23,7 @@ export default function BranchView({ profile, readOnly = false }: { profile: Use
   const [drugs, setDrugs] = useState<Drug[]>([]);
   const [dispenseRecords, setDispenseRecords] = useState<DispenseRecord[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
-  const resolvedBranchName = branches.find(b => b.id === locId)?.name || 'Unknown Branch';
+  const resolvedBranchName = branches.find(b => b.id === locId)?.name || (locId ? 'Assigned Branch' : 'All Branches');
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   // Modal State for dispensing a prescription with locked official rate & payment
@@ -87,10 +87,12 @@ export default function BranchView({ profile, readOnly = false }: { profile: Use
         : (prescription.unitPrice || 0);
       const totalAmount = officialUnitPrice * prescription.quantity;
 
+      const targetBranch = locId || prescription.targetBranchId || (branches[0]?.id || '');
+
       // Create dispense record with official financial sales data
       await addDoc(collection(db, 'dispense_records'), {
         prescriptionId: prescription.id,
-        branchId: locId,
+        branchId: targetBranch,
         branchName: resolvedBranchName,
         drugId: prescription.drugId,
         drugName: prescription.drugName,
@@ -112,10 +114,12 @@ export default function BranchView({ profile, readOnly = false }: { profile: Use
       });
 
       // Update inventory quantity in branch
-      const drugRef = doc(db, 'drugs', prescription.drugId);
-      await updateDoc(drugRef, {
-        ['branchStock.' + locId]: increment(-prescription.quantity)
-      });
+      if (targetBranch) {
+        const drugRef = doc(db, 'drugs', prescription.drugId);
+        await updateDoc(drugRef, {
+          ['branchStock.' + targetBranch]: increment(-prescription.quantity)
+        });
+      }
 
       setSelectedPrescriptionForDispense(null);
     } catch (err: any) {
@@ -153,9 +157,11 @@ export default function BranchView({ profile, readOnly = false }: { profile: Use
       const officialUnitPrice = (drug.sellingPrice !== undefined && drug.sellingPrice !== null) ? drug.sellingPrice : 0;
       const totalAmount = officialUnitPrice * qtyToSell;
 
+      const targetBranch = locId || (branches[0]?.id || '');
+
       // Record direct sales revenue in dispense_records
       await addDoc(collection(db, 'dispense_records'), {
-        branchId: locId,
+        branchId: targetBranch,
         branchName: resolvedBranchName,
         drugId: drug.id,
         drugName: drug.name,
@@ -170,9 +176,11 @@ export default function BranchView({ profile, readOnly = false }: { profile: Use
       });
 
       // Deduct from branch stock (does NOT alter sellingPrice or costPrice)
-      await updateDoc(doc(db, 'drugs', drug.id), {
-        ['branchStock.' + locId]: increment(-qtyToSell)
-      });
+      if (targetBranch) {
+        await updateDoc(doc(db, 'drugs', drug.id), {
+          ['branchStock.' + targetBranch]: increment(-qtyToSell)
+        });
+      }
 
       // Reset form
       setDirectSaleDrugId('');
@@ -189,19 +197,24 @@ export default function BranchView({ profile, readOnly = false }: { profile: Use
     }
   };
 
-  const filteredDispenses = !locId ? dispenseRecords : dispenseRecords.filter(d => d.branchId === locId);
+  const filteredDispenses = !locId 
+    ? dispenseRecords 
+    : dispenseRecords.filter(d => {
+        const b = d.branchId || d.locationId;
+        return b === locId || !b;
+      });
   const pending = prescriptions.filter(p => p.status === 'pending' && (!p.targetBranchId || !locId || p.targetBranchId === locId));
   const dispensed = prescriptions.filter(p => p.status === 'dispensed' && (!p.targetBranchId || !locId || p.targetBranchId === locId));
 
   // Calculate today's sales income recorded by branch
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  const todayDispenses = filteredDispenses.filter(d => d.createdAt >= todayStart.getTime());
+  const todayDispenses = filteredDispenses.filter(d => (d.createdAt || 0) >= todayStart.getTime());
   const todayIncome = todayDispenses.reduce((sum, d) => {
-    if (d.totalAmount !== undefined) return sum + d.totalAmount;
-    if (d.unitPrice !== undefined) return sum + (d.quantityDispensed * d.unitPrice);
-    const drug = drugs.find(item => item.id === d.drugId);
-    return sum + (d.quantityDispensed * (drug?.sellingPrice || 0));
+    if (d.totalAmount !== undefined && d.totalAmount !== null) return sum + d.totalAmount;
+    const qty = d.quantityDispensed ?? d.quantity ?? 0;
+    const price = d.unitPrice || d.sellingPrice || 0;
+    return sum + (qty * price);
   }, 0);
 
   const selectedPrescriptionDrug = selectedPrescriptionForDispense 
@@ -217,34 +230,41 @@ export default function BranchView({ profile, readOnly = false }: { profile: Use
     : 0;
 
   return (
-        <div className="flex flex-col gap-4">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-slate-800">Branch Dashboard</h1>
-        {!readOnly && (
-          <button
-            onClick={() => setShowDirectSaleModal(true)}
-            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold shadow-md transition-colors flex items-center gap-2 cursor-pointer"
-          >
-            <ShoppingCart className="w-4 h-4" />
-            Sale
-          </button>
-        )}
-      </div>
-      {readOnly && (
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-          <label className="text-sm font-bold text-slate-700">View Branch:</label>
-          <select 
-            className="p-2 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white focus:outline-none focus:border-indigo-600 font-medium"
-            value={selectedBranchId}
-            onChange={(e) => setSelectedBranchId(e.target.value)}
-          >
-            <option value="">All Branches</option>
-            {branches.map(b => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </select>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Branch Dashboard</h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Active Branch: <span className="font-bold text-indigo-700">{resolvedBranchName}</span>
+          </p>
         </div>
-      )}
+        <div className="flex items-center gap-2">
+          {branches.length > 0 && (
+            <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-lg p-1 shadow-xs">
+              <span className="text-[11px] font-bold text-slate-500 pl-2">Branch:</span>
+              <select 
+                className="p-1.5 rounded text-xs bg-transparent focus:outline-none focus:text-indigo-600 font-bold text-slate-700"
+                value={selectedBranchId}
+                onChange={(e) => setSelectedBranchId(e.target.value)}
+              >
+                <option value="">All Branches</option>
+                {branches.map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {!readOnly && (
+            <button
+              onClick={() => setShowDirectSaleModal(true)}
+              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-md transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap"
+            >
+              <ShoppingCart className="w-4 h-4" />
+              New Sale
+            </button>
+          )}
+        </div>
+      </div>
       {/* Local Stock Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Local Low-Stock Alerts */}
@@ -437,23 +457,32 @@ export default function BranchView({ profile, readOnly = false }: { profile: Use
 
           <div className="p-4 flex flex-col flex-1 gap-3">
             <div className="flex-1 space-y-2.5 overflow-y-auto max-h-[500px]">
-              {filteredDispenses.slice(0, 15).map(record => {
+              {filteredDispenses.slice(0, 50).map(record => {
                 const drug = drugs.find(d => d.id === record.drugId);
-                const unitPrice = record.unitPrice || drug?.sellingPrice || 0;
-                const total = record.totalAmount || (unitPrice * record.quantityDispensed);
+                const qty = record.quantityDispensed ?? record.quantity ?? 0;
+                const unitPrice = record.unitPrice || record.sellingPrice || drug?.sellingPrice || 0;
+                const total = record.totalAmount !== undefined && record.totalAmount !== null 
+                  ? record.totalAmount 
+                  : (unitPrice * qty);
 
                 return (
-                  <div key={record.id} className="p-3 border border-slate-200 rounded-xl bg-slate-50/70 text-xs flex justify-between items-center">
+                  <div key={record.id} className="p-3 border border-slate-200 rounded-xl bg-slate-50/70 text-xs flex justify-between items-center hover:bg-slate-100/60 transition-colors">
                     <div>
                       <div className="font-bold text-slate-900">
-                        {record.drugName} <span className="font-normal text-slate-500">({record.quantityDispensed} {drug?.unit || 'units'})</span>
+                        {record.drugName || drug?.name || 'Item'} <span className="font-normal text-slate-500">({qty} {drug?.unit || 'units'})</span>
                       </div>
-                      <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-2">
+                      <div className="text-[10px] text-slate-500 mt-0.5 flex flex-wrap items-center gap-1.5 sm:gap-2">
                         <span>Patient: {record.patientName || 'Walk-in'}</span>
                         <span>&bull;</span>
                         <span className="capitalize">{record.paymentMethod || 'Cash'}</span>
                         <span>&bull;</span>
-                        <span>{format(record.createdAt, 'MMM d, h:mm a')}</span>
+                        <span>{record.createdAt ? format(record.createdAt, 'MMM d, h:mm a') : 'Recent'}</span>
+                        {record.dispensedByName && (
+                          <>
+                            <span>&bull;</span>
+                            <span className="text-slate-400">By: {record.dispensedByName}</span>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -462,7 +491,7 @@ export default function BranchView({ profile, readOnly = false }: { profile: Use
                         +₦{total.toLocaleString()}
                       </div>
                       <div className="text-[10px] text-slate-400">
-                        {unitPrice > 0 ? `₦${unitPrice}/unit (Fixed)` : ''}
+                        {unitPrice > 0 ? `₦${unitPrice.toLocaleString()}/unit` : ''}
                       </div>
                     </div>
                   </div>

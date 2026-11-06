@@ -162,7 +162,7 @@ function fromSupabaseData(data: any, table?: string) {
   }
 
   // Cross-populate alias fields for application components
-  if (table === 'purchases' || cameled.unitCostPrice !== undefined || data.total_cost_price !== undefined || data.quantity !== undefined) {
+  if (table === 'purchases' || (table === undefined && cameled.unitCostPrice !== undefined && cameled.supplier !== undefined)) {
     const qty = cameled.quantityPurchased ?? cameled.quantity ?? 0;
     cameled.quantityPurchased = qty;
     cameled.quantity = qty;
@@ -184,13 +184,33 @@ function fromSupabaseData(data: any, table?: string) {
     cameled.date = cameled.date ?? cameled.expenseDate;
     cameled.adminId = cameled.adminId ?? cameled.createdBy ?? '';
     cameled.adminName = cameled.adminName ?? cameled.createdByName ?? '';
-  } else if (table === 'dispense_records') {
-    cameled.quantityDispensed = cameled.quantityDispensed ?? cameled.quantity ?? 0;
-    cameled.quantity = cameled.quantity ?? cameled.quantityDispensed ?? 0;
-    cameled.branchId = cameled.branchId ?? cameled.locationId;
-    cameled.locationId = cameled.locationId ?? cameled.branchId;
-    cameled.unitPrice = cameled.unitPrice ?? cameled.sellingPrice ?? 0;
-    cameled.sellingPrice = cameled.sellingPrice ?? cameled.unitPrice ?? 0;
+  } else if (table === 'dispense_records' || (table === undefined && (cameled.prescriptionId !== undefined || cameled.dispensedBy !== undefined || cameled.sellingPrice !== undefined))) {
+    const qty = cameled.quantityDispensed ?? cameled.quantity ?? 0;
+    cameled.quantityDispensed = qty;
+    cameled.quantity = qty;
+
+    const branch = cameled.branchId ?? cameled.locationId ?? '';
+    cameled.branchId = branch;
+    cameled.locationId = branch;
+
+    const price = cameled.unitPrice ?? cameled.sellingPrice ?? 0;
+    cameled.unitPrice = price;
+    cameled.sellingPrice = price;
+
+    const total = cameled.totalAmount !== undefined && cameled.totalAmount !== null 
+      ? cameled.totalAmount 
+      : (price * qty);
+    cameled.totalAmount = total;
+
+    cameled.patientName = cameled.patientName ?? cameled.patientId ?? 'Walk-in Customer';
+
+    const dispBy = cameled.dispensedBy ?? cameled.userId ?? cameled.adminId ?? '';
+    cameled.dispensedBy = dispBy;
+
+    const dispByName = cameled.dispensedByName ?? cameled.userName ?? cameled.adminName ?? 'Staff';
+    cameled.dispensedByName = dispByName;
+  } else if (table === 'prescriptions') {
+    cameled.targetBranchId = cameled.targetBranchId ?? cameled.locationId;
     cameled.patientName = cameled.patientName ?? cameled.patientId;
   } else if (table === 'disposals') {
     cameled.quantityDisposed = cameled.quantityDisposed ?? cameled.quantity ?? 0;
@@ -202,6 +222,8 @@ function fromSupabaseData(data: any, table?: string) {
     cameled.missingQuantity = cameled.missingQuantity ?? cameled.discrepancy ?? 0;
     cameled.adminId = cameled.adminId ?? cameled.reportedBy ?? '';
     cameled.adminName = cameled.adminName ?? cameled.reportedByName ?? '';
+  } else if (table === 'inter_branch_transfers') {
+    cameled.quantityTransferred = cameled.quantityTransferred ?? cameled.quantity ?? 0;
   }
 
   return cameled;
@@ -456,6 +478,12 @@ export function onSnapshot(ref: any, onNext: (snap: any) => void, onError?: (err
          else if (c.op === '>=') sbQuery = sbQuery.gte(toSnake(c.field), c.value);
          else if (c.op === '<=') sbQuery = sbQuery.lte(toSnake(c.field), c.value);
       }
+      if (c._type === 'orderBy') {
+        sbQuery = sbQuery.order(toSnake(c.field), { ascending: c.direction === 'asc' });
+      }
+      if (c._type === 'limit') {
+        sbQuery = sbQuery.limit(c.value);
+      }
     }
   }
 
@@ -474,7 +502,7 @@ export function onSnapshot(ref: any, onNext: (snap: any) => void, onError?: (err
       const pk = getPrimaryKey(table);
       const camelPk = toCamel(pk);
       if (payload.eventType === 'INSERT') {
-        currentData.push(fromSupabaseData(payload.new, table));
+        currentData.unshift(fromSupabaseData(payload.new, table));
       } else if (payload.eventType === 'UPDATE') {
         const updated = fromSupabaseData(payload.new, table);
         currentData = currentData.map(item => item[camelPk] === updated[camelPk] ? updated : item);
